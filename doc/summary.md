@@ -23,6 +23,7 @@ WTLang is a Domain Specific Language to create web pages that show and allow edi
 - Functions and chains are first class citizens
 - The language syntax is based on curly brackets to define code blocks. It does not use spaces or delimiters (e.g. semicolon) to separate statements.
 - The language allows defining validity checks and rules for table content, such as unique - non null constraints on fields, or more complex, user defined validation functions.
+- The language has native support for testing functions and function chains, by using an excel files, each with two sheets defining input and expected output. Tests reside in a folder separate from production code, and they are defined as a list of test excel files to use for a given function / chain
 
 
 ## Target platform

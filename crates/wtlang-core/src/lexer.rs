@@ -22,6 +22,9 @@ pub enum TokenType {
     Forall,
     In,
     Return,
+    Filter,
+    Single,
+    Multi,
     
     // Types
     Int,
@@ -134,6 +137,7 @@ impl Lexer {
         // Single-line comments
         if ch == '/' && self.peek() == Some('/') {
             self.skip_comment();
+            self.skip_whitespace();  // Skip whitespace after comment
             return self.next_token();
         }
         
@@ -348,6 +352,9 @@ impl Lexer {
             "forall" => TokenType::Forall,
             "in" => TokenType::In,
             "return" => TokenType::Return,
+            "filter" => TokenType::Filter,
+            "single" => TokenType::Single,
+            "multi" => TokenType::Multi,
             "int" => TokenType::Int,
             "float" => TokenType::Float,
             "string" => TokenType::String,

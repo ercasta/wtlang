@@ -1,0 +1,35 @@
+// Example: Using filters with show and show_editable
+
+table Employee {
+    name: string
+    department: string
+    position: string
+    salary: currency
+}
+
+page EmployeeViewer {
+    title "Employee Management with Filters"
+    
+    // Load employee data
+    let employees = load_csv("employees.csv", Employee)
+    
+    // Show with single filter on department
+    show(employees, [filter("department", single)])
+    
+    // Show with multiple filters
+    show(employees, [
+        filter("department", single),
+        filter("position", single)
+    ])
+    
+    // Editable table with filters
+    let updated = show_editable(employees, [
+        filter("department", multi),
+        filter("position", multi)
+    ])
+    
+    // Save changes
+    button "Save Changes" {
+        save_csv(updated, "employees_updated.csv")
+    }
+}

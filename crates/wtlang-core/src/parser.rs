@@ -73,6 +73,7 @@ impl Parser {
             TokenType::Date => Ok(Type::Date),
             TokenType::Currency => Ok(Type::Currency),
             TokenType::Bool => Ok(Type::Bool),
+            TokenType::Filter => Ok(Type::Filter),  // filter type
             _ => Err(format!("Expected type, got {:?}", token.token_type)),
         }
     }
@@ -495,6 +496,46 @@ impl Parser {
                 let expr = self.parse_expression()?;
                 self.expect(TokenType::RightParen)?;
                 Ok(expr)
+            },
+            TokenType::LeftBracket => {
+                // Parse array literal: [expr1, expr2, ...]
+                self.advance();
+                let mut elements = Vec::new();
+                
+                // Handle empty array
+                if self.check(&TokenType::RightBracket) {
+                    self.advance();
+                    return Ok(Expr::ArrayLiteral(elements));
+                }
+                
+                // Parse first element
+                elements.push(self.parse_expression()?);
+                
+                // Parse remaining elements
+                while self.check(&TokenType::Comma) {
+                    self.advance(); // consume comma
+                    elements.push(self.parse_expression()?);
+                }
+                
+                self.expect(TokenType::RightBracket)?;
+                Ok(Expr::ArrayLiteral(elements))
+            },
+            TokenType::Filter => {
+                // Parse filter literal: filter(column, single/multi)
+                self.advance();
+                self.expect(TokenType::LeftParen)?;
+                let column = self.expect_string()?;
+                self.expect(TokenType::Comma)?;
+                
+                let mode_token = self.advance();
+                let mode = match &mode_token.token_type {
+                    TokenType::Single => FilterMode::Single,
+                    TokenType::Multi => FilterMode::Multi,
+                    _ => return Err(format!("Expected 'single' or 'multi', got {:?}", mode_token.token_type)),
+                };
+                
+                self.expect(TokenType::RightParen)?;
+                Ok(Expr::FilterLiteral(FilterDef { column, mode }))
             },
             _ => Err(format!("Unexpected token in expression: {:?}", token.token_type)),
         }

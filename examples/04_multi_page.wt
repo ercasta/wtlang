@@ -19,7 +19,7 @@ page Dashboard {
     text "🎉 Great performance this month!"
   }
   
-  show orders
+  show(orders)
 }
 
 page OrderManagement {
@@ -27,7 +27,7 @@ page OrderManagement {
   
   let orders = load_csv("orders.csv")
   
-  show_editable orders
+  show_editable(orders)
   
   button "Save Changes" {
     save_csv(orders, "orders.csv")

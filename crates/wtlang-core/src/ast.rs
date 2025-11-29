@@ -36,6 +36,19 @@ pub enum Type {
     Currency,
     Bool,
     Table(String), // Table<TypeName>
+    Filter,        // Filter type for table column filters
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FilterMode {
+    Single,
+    Multi,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FilterDef {
+    pub column: String,
+    pub mode: FilterMode,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +122,7 @@ pub enum Expr {
     Chain { left: Box<Expr>, right: Box<Expr> },
     TableLiteral(Vec<(String, Expr)>),
     ArrayLiteral(Vec<Expr>),
+    FilterLiteral(FilterDef),
 }
 
 #[derive(Debug, Clone, PartialEq)]

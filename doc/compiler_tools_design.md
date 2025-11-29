@@ -204,7 +204,404 @@ Using the `codespan-reporting` crate, WTLang can produce beautiful error message
 
 This is essential for a DSL targeting non-expert users.
 
-## 6. Language Server Protocol (LSP) Implementation
+## 6. Source Code Structure for Multi-Tool Support
+
+### Overview
+
+The WTLang toolchain is designed to support multiple tools beyond just the compiler: Language Server, debugger, documentation generator, formatter, and more. To achieve this, the codebase must be structured to share core components while allowing tool-specific functionality.
+
+### Alternatives Considered
+
+**A. Monolithic Single Binary**
+```
+wtlang/
+└── src/
+    └── main.rs  // Everything in one file
+```
+- Pros: Simple, everything in one place
+- Cons: Cannot reuse components, becomes unmaintainable, slow compile times
+
+**B. Separate Projects for Each Tool**
+```
+wtlang-compiler/
+wtlang-lsp/
+wtlang-debugger/
+wtlang-formatter/
+```
+- Pros: Clear separation, independent versioning
+- Cons: Code duplication, synchronization issues, inconsistent behavior
+
+**C. Library-Based Architecture with Multiple Binaries (Chosen)**
+```
+wtlang/
+├── crates/
+│   ├── wtlang-core/        # Shared library
+│   ├── wtlang-compiler/    # Compiler binary
+│   ├── wtlang-lsp/         # LSP server binary
+│   ├── wtlang-debugger/    # Debugger
+│   └── wtlang-formatter/   # Code formatter
+└── Cargo.toml              # Workspace configuration
+```
+- Pros: Code reuse, consistent behavior, independent tools
+- Cons: More complex project structure, workspace management
+
+**D. Plugin Architecture**
+- Pros: Extensible, community contributions
+- Cons: Complex, version management, performance overhead
+
+### Rationale: Library-Based Architecture
+
+The library-based architecture provides the best balance:
+1. **Core library** (`wtlang-core`) contains shared components
+2. **Tool binaries** use the core library for specific purposes
+3. **Cargo workspace** manages all crates together
+4. **Consistent behavior** across all tools
+5. **Efficient development** - changes to core propagate to all tools
+
+### Detailed Source Code Structure
+
+```
+wtlang/
+├── Cargo.toml                      # Workspace root
+│
+├── crates/
+│   │
+│   ├── wtlang-core/                # Core library (shared by all tools)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs              # Library entry point
+│   │       ├── syntax/             # Syntax analysis
+│   │       │   ├── mod.rs
+│   │       │   ├── lexer.rs        # Tokenization
+│   │       │   ├── token.rs        # Token definitions
+│   │       │   ├── parser.rs       # AST construction
+│   │       │   └── ast.rs          # AST node definitions
+│   │       ├── semantics/          # Semantic analysis
+│   │       │   ├── mod.rs
+│   │       │   ├── types.rs        # Type system
+│   │       │   ├── checker.rs      # Type checker
+│   │       │   ├── symbols.rs      # Symbol table
+│   │       │   └── validator.rs    # Constraint validation
+│   │       ├── ir/                 # Intermediate representation
+│   │       │   ├── mod.rs
+│   │       │   ├── nodes.rs        # IR node types
+│   │       │   └── builder.rs      # AST → IR transformation
+│   │       ├── diagnostics/        # Error reporting
+│   │       │   ├── mod.rs
+│   │       │   ├── error.rs        # Error types
+│   │       │   ├── reporter.rs     # Diagnostic reporter
+│   │       │   └── spans.rs        # Source location tracking
+│   │       ├── query/              # Query system (Salsa-style)
+│   │       │   ├── mod.rs
+│   │       │   └── database.rs     # Incremental computation
+│   │       └── util/               # Utilities
+│   │           ├── mod.rs
+│   │           ├── string_interner.rs
+│   │           └── file_cache.rs
+│   │
+│   ├── wtlang-compiler/            # Compiler binary
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── main.rs             # CLI entry point
+│   │       ├── cli.rs              # Command-line interface
+│   │       ├── codegen/            # Code generation
+│   │       │   ├── mod.rs
+│   │       │   ├── python.rs       # Python/Streamlit generator
+│   │       │   ├── typescript.rs   # Future: TypeScript generator
+│   │       │   └── common.rs       # Shared codegen utilities
+│   │       ├── optimize/           # Optimization passes
+│   │       │   ├── mod.rs
+│   │       │   ├── dead_code.rs
+│   │       │   └── constant_fold.rs
+│   │       └── project/            # Project management
+│   │           ├── mod.rs
+│   │           └── config.rs       # wtlang.toml handling
+│   │
+│   ├── wtlang-lsp/                 # Language Server
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── main.rs             # LSP server entry
+│   │       ├── server.rs           # LSP protocol implementation
+│   │       ├── features/           # LSP features
+│   │       │   ├── mod.rs
+│   │       │   ├── completion.rs   # Auto-completion
+│   │       │   ├── hover.rs        # Type information on hover
+│   │       │   ├── definition.rs   # Go to definition
+│   │       │   ├── references.rs   # Find references
+│   │       │   ├── rename.rs       # Symbol renaming
+│   │       │   ├── diagnostics.rs  # Real-time error checking
+│   │       │   ├── formatting.rs   # Code formatting
+│   │       │   └── code_actions.rs # Quick fixes
+│   │       ├── state/              # Server state management
+│   │       │   ├── mod.rs
+│   │       │   └── workspace.rs    # Workspace files tracking
+│   │       └── analysis/           # Code analysis for IDE
+│   │           ├── mod.rs
+│   │           ├── document.rs     # Document analysis
+│   │           └── project.rs      # Project-wide analysis
+│   │
+│   ├── wtlang-formatter/           # Code formatter
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── main.rs
+│   │       ├── format.rs           # Formatting logic
+│   │       └── config.rs           # Formatting options
+│   │
+│   ├── wtlang-debugger/            # Debugger (future)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── main.rs
+│   │       └── debug_adapter.rs    # DAP implementation
+│   │
+│   └── wtlang-doc/                 # Documentation generator
+│       ├── Cargo.toml
+│       └── src/
+│           ├── main.rs
+│           └── generator.rs        # API doc generation
+│
+├── examples/                       # Example WTLang programs
+├── tests/                          # Integration tests
+│   ├── compiler/
+│   ├── lsp/
+│   └── formatter/
+│
+└── docs/                           # Project documentation
+    ├── design/
+    ├── tutorial/
+    └── api/
+```
+
+### Core Library Design Principles
+
+**1. Incremental and Query-Based**
+Use a Salsa-like query system for incremental computation:
+```rust
+// wtlang-core/src/query/database.rs
+#[salsa::query_group(CompilerDatabase)]
+pub trait WTLangDatabase {
+    #[salsa::input]
+    fn source_text(&self, file: FileId) -> Arc<String>;
+    
+    fn parse(&self, file: FileId) -> Arc<Program>;
+    fn check_types(&self, file: FileId) -> Arc<TypedProgram>;
+    fn diagnostics(&self, file: FileId) -> Arc<Vec<Diagnostic>>;
+}
+```
+
+Benefits:
+- **Incremental**: Only recompute what changed
+- **Cached**: Automatic memoization
+- **IDE-friendly**: Perfect for Language Server
+- **Consistent**: Same logic for compiler and LSP
+
+**2. Position-Aware AST**
+Every AST node tracks its source location:
+```rust
+// wtlang-core/src/syntax/ast.rs
+#[derive(Debug, Clone)]
+pub struct Spanned<T> {
+    pub node: T,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Span {
+    pub start: Position,
+    pub end: Position,
+}
+
+pub type Expr = Spanned<ExprKind>;
+pub type Statement = Spanned<StatementKind>;
+```
+
+Benefits:
+- **Error reporting**: Precise error locations
+- **IDE features**: Hover, go-to-definition work correctly
+- **Refactoring**: Know exact code ranges to modify
+
+**3. Immutable Data Structures**
+Use persistent data structures with Arc/Rc:
+```rust
+// wtlang-core/src/syntax/ast.rs
+pub struct Program {
+    pub items: Arc<[ProgramItem]>,
+    pub source: FileId,
+}
+
+pub struct TypedProgram {
+    pub ast: Arc<Program>,
+    pub types: Arc<TypeMap>,
+    pub symbols: Arc<SymbolTable>,
+}
+```
+
+Benefits:
+- **Thread-safe**: Can be shared across threads (LSP needs this)
+- **Efficient cloning**: Cheap to clone and pass around
+- **Caching**: Safe to cache without mutation concerns
+
+**4. Error Resilience**
+Parser continues after errors for better IDE experience:
+```rust
+// wtlang-core/src/syntax/parser.rs
+pub struct ParseResult {
+    pub program: Program,
+    pub errors: Vec<ParseError>,
+}
+
+impl Parser {
+    fn parse(&mut self) -> ParseResult {
+        let mut items = Vec::new();
+        let mut errors = Vec::new();
+        
+        while !self.is_at_end() {
+            match self.parse_item() {
+                Ok(item) => items.push(item),
+                Err(err) => {
+                    errors.push(err);
+                    self.recover(); // Skip to next item
+                }
+            }
+        }
+        
+        ParseResult { program: Program { items }, errors }
+    }
+}
+```
+
+Benefits:
+- **IDE tolerance**: Show multiple errors, don't stop at first
+- **Better UX**: Users see all issues at once
+- **Partial analysis**: Can still provide some features with errors
+
+### Tool-Specific Components
+
+**Compiler-Specific:**
+- Code generation backends
+- Optimization passes
+- Build system integration
+- Output file management
+
+**LSP-Specific:**
+- Real-time document synchronization
+- Incremental re-parsing
+- Symbol caching
+- Workspace management
+- Quick fix suggestions
+
+**Formatter-Specific:**
+- Pretty-printing logic
+- Configuration file parsing
+- Comment preservation
+- Whitespace handling
+
+**Debugger-Specific:**
+- Debug adapter protocol
+- Breakpoint management
+- Variable inspection
+- Step execution
+
+### Shared vs. Tool-Specific Code
+
+| Component | Core Library | Compiler | LSP | Formatter | Debugger |
+|-----------|-------------|----------|-----|-----------|----------|
+| Lexer | ✓ | | | | |
+| Parser | ✓ | | | | |
+| AST | ✓ | | | | |
+| Type Checker | ✓ | | | | |
+| Symbol Table | ✓ | | | | |
+| Diagnostics | ✓ | | | | |
+| IR Generation | ✓ | | | | |
+| Code Generation | | ✓ | | | |
+| Optimization | | ✓ | | | |
+| Auto-completion | | | ✓ | | |
+| Hover Info | | | ✓ | | |
+| Pretty Printing | | | | ✓ | |
+| Debug Adapter | | | | | ✓ |
+
+### Cargo Workspace Configuration
+
+```toml
+# Root Cargo.toml
+[workspace]
+members = [
+    "crates/wtlang-core",
+    "crates/wtlang-compiler",
+    "crates/wtlang-lsp",
+    "crates/wtlang-formatter",
+    "crates/wtlang-debugger",
+    "crates/wtlang-doc",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["WTLang Contributors"]
+license = "MIT"
+
+[workspace.dependencies]
+# Shared dependencies
+salsa = "0.16"
+tower-lsp = "0.20"
+codespan-reporting = "0.11"
+thiserror = "1.0"
+anyhow = "1.0"
+```
+
+### Build Process
+
+```bash
+# Build everything
+cargo build --workspace
+
+# Build only compiler
+cargo build -p wtlang-compiler
+
+# Build only LSP
+cargo build -p wtlang-lsp
+
+# Run tests for all crates
+cargo test --workspace
+
+# Run only core tests
+cargo test -p wtlang-core
+```
+
+### Benefits of This Structure
+
+1. **Code Reuse**: Core library shared by all tools (no duplication)
+2. **Consistency**: Same parsing, type checking across tools
+3. **Maintainability**: Changes to core automatically affect all tools
+4. **Performance**: Incremental compilation via Salsa
+5. **IDE Integration**: LSP has everything it needs
+6. **Extensibility**: Easy to add new tools
+7. **Testing**: Can test core independently
+8. **Modularity**: Clear boundaries between components
+
+### Migration Path
+
+**Phase 1** (Current - Basic Compiler):
+- Flat structure with all code in `src/`
+- Single binary `wtc`
+
+**Phase 2** (Refactor to Library):
+- Move core code to `wtlang-core` crate
+- Compiler uses core library
+- Maintain backward compatibility
+
+**Phase 3** (Add LSP):
+- Create `wtlang-lsp` crate
+- Implement LSP using core library
+- Add incremental computation (Salsa)
+
+**Phase 4** (Additional Tools):
+- Add formatter, debugger, doc generator
+- All use core library
+- Share testing infrastructure
+
+This structure ensures the WTLang toolchain can grow from a simple compiler to a comprehensive development environment while maintaining code quality and consistency.
+
+## 7. Language Server Protocol (LSP) Implementation
 
 ### Alternatives Considered
 
@@ -261,7 +658,7 @@ Implementing the Language Server Protocol ensures WTLang works in any modern edi
 - **Test debugging**: Set breakpoints in test blocks
 - **Test coverage visualization**: Show which lines are tested
 
-## 7. External Function Autocompletion
+## 8. External Function Autocompletion
 
 ### Alternatives Considered
 
@@ -307,7 +704,7 @@ def classify(text: str) -> str: ...
 
 This provides the best developer experience—users get autocomplete for external functions without manual declaration overhead, while maintaining type safety.
 
-## 8. Build System and Tooling
+## 9. Build System and Tooling
 
 ### Alternatives Considered
 
@@ -383,7 +780,7 @@ wtc init my-project  # Scaffold new project
 
 This provides familiar tooling for developers while leveraging Rust's excellent build infrastructure.
 
-## 9. Testing Strategy
+## 10. Testing Strategy
 
 ### Alternatives Considered
 
@@ -504,7 +901,7 @@ The `wtc test` command:
 
 This catches bugs at all levels while maintaining fast development iteration.
 
-## 10. Documentation and Developer Experience
+## 11. Documentation and Developer Experience
 
 ### Alternatives Considered
 
@@ -549,7 +946,7 @@ Multi-channel documentation approach:
 
 Focus on making the first 5 minutes delightful—clear installation, simple "hello world", immediate value.
 
-## 11. Release and Distribution
+## 12. Release and Distribution
 
 ### Alternatives Considered
 
@@ -595,7 +992,7 @@ jobs:
 
 Automated via GitHub Actions for zero-friction releases.
 
-## 12. Performance Optimization
+## 13. Performance Optimization
 
 ### Alternatives Considered
 

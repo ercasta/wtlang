@@ -14,7 +14,7 @@ page TaxCalculator {
     let orders = load_csv("orders.csv")
     
     section "Orders with Tax" {
-        show orders
+        show(orders)
         
         let first_order_amount = 100.0
         let tax_amount = calculate_tax(first_order_amount, 0.15)

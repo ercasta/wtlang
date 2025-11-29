@@ -233,10 +233,11 @@ wtc check <input.wt>
 See the `examples/` directory:
 
 - **01_hello.wt**: Simple "Hello World" page
-- **02_tables.wt**: Loading and displaying CSV data
+- **02_tables.wt**: Loading and displaying CSV data with validation
 - **03_chaining.wt**: Function chaining and filtering
 - **04_multi_page.wt**: Multi-page application
 - **05_external_functions.wt**: External function declarations and imports
+- **06_validation.wt**: CSV validation and editable tables
 
 Each example includes sample data in `examples/data/`.
 

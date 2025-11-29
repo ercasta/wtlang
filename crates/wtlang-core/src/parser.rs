@@ -129,16 +129,6 @@ impl Parser {
                 let text = self.expect_string()?;
                 Ok(Statement::Text(text))
             },
-            TokenType::Show => {
-                self.advance();
-                let expr = self.parse_expression()?;
-                Ok(Statement::Show(expr))
-            },
-            TokenType::ShowEditable => {
-                self.advance();
-                let expr = self.parse_expression()?;
-                Ok(Statement::ShowEditable(expr))
-            },
             TokenType::Button => {
                 self.advance();
                 let label = self.expect_string()?;

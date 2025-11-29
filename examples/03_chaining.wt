@@ -13,7 +13,7 @@ page ProductAnalysis {
   let products = load_csv("products.csv")
   
   section "All Products" {
-    show products
+    show(products)
     
     let total_products = count(products)
     text "Total Products: {total_products}"
@@ -21,7 +21,7 @@ page ProductAnalysis {
   
   section "Expensive Products" {
     let expensive = products -> sort_desc(_, "price")
-    show expensive
+    show(expensive)
   }
   
   section "Summary Statistics" {

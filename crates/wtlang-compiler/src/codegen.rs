@@ -6,6 +6,7 @@ pub struct CodeGenerator {
     indent_level: usize,
     table_defs: HashMap<String, TableDef>,
     external_functions: HashMap<String, ExternalFunction>,
+    key_counter: usize,
 }
 
 impl CodeGenerator {
@@ -14,6 +15,7 @@ impl CodeGenerator {
             indent_level: 0,
             table_defs: HashMap::new(),
             external_functions: HashMap::new(),
+            key_counter: 0,
         }
     }
 
@@ -98,14 +100,6 @@ impl CodeGenerator {
                 // Handle string interpolation
                 let formatted = self.format_string_interpolation(text);
                 Ok(format!("{}st.write({})\n", indent, formatted))
-            },
-            Statement::Show(expr) => {
-                let expr_code = self.generate_expr(expr)?;
-                Ok(format!("{}st.dataframe({})\n", indent, expr_code))
-            },
-            Statement::ShowEditable(expr) => {
-                let expr_code = self.generate_expr(expr)?;
-                Ok(format!("{}st.data_editor({})\n", indent, expr_code))
             },
             Statement::Button { label, body } => {
                 let mut code = format!("{}if st.button(\"{}\"):\n", indent, self.escape_string(label));
@@ -241,10 +235,50 @@ impl CodeGenerator {
         let func_name = match call.name.as_str() {
             "load_csv" => {
                 if call.args.len() < 1 {
-                    return Err("load_csv requires at least 1 argument".to_string());
+                    return Err("load_csv requires at least 1 argument (file path)".to_string());
                 }
                 let file_arg = self.generate_expr(&call.args[0])?;
+                
+                // Check if a table type was specified as second argument
+                if call.args.len() >= 2 {
+                    if let Expr::Identifier(table_name) = &call.args[1] {
+                        if let Some(table_def) = self.table_defs.get(table_name) {
+                            // Generate code with validation
+                            let field_names: Vec<String> = table_def.fields.iter()
+                                .map(|f| format!("\"{}\"", f.name))
+                                .collect();
+                            let expected_cols = format!("[{}]", field_names.join(", "));
+                            
+                            return Ok(format!(
+                                "(_df := pd.read_csv({}), \
+                                st.error(f'Invalid CSV: expected columns {}, got {{list(_df.columns)}}') \
+                                if not set({}).issubset(set(_df.columns)) else None, \
+                                _df)[2]",
+                                file_arg, expected_cols, expected_cols
+                            ));
+                        }
+                    }
+                }
+                
+                // No table type specified, just load the CSV
                 return Ok(format!("pd.read_csv({})", file_arg));
+            },
+            "show" => {
+                if call.args.len() < 1 {
+                    return Err("show requires 1 argument (table to display)".to_string());
+                }
+                let df_arg = self.generate_expr(&call.args[0])?;
+                return Ok(format!("st.dataframe({})", df_arg));
+            },
+            "show_editable" => {
+                if call.args.len() < 1 {
+                    return Err("show_editable requires 1 argument (table to edit)".to_string());
+                }
+                let df_arg = self.generate_expr(&call.args[0])?;
+                // show_editable returns the edited dataframe (tables are immutable)
+                return Ok(format!("st.data_editor({}, key=\"editor_{}\", use_container_width=True)", 
+                    df_arg, 
+                    self.get_unique_key()));
             },
             "save_csv" => {
                 if call.args.len() < 2 {
@@ -337,5 +371,11 @@ impl CodeGenerator {
 
     fn get_indent(&self) -> String {
         "    ".repeat(self.indent_level)
+    }
+
+    fn get_unique_key(&mut self) -> usize {
+        let key = self.key_counter;
+        self.key_counter += 1;
+        key
     }
 }

@@ -1,0 +1,22 @@
+table User {
+  id: int
+  name: string
+  email: string
+  age: int
+}
+
+page UserList {
+  title "User Management with Validation"
+  subtitle "Load and validate CSV data"
+  
+  let users = load_csv("users.csv", User)
+  
+  show(users)
+  
+  let edited_users = show_editable(users)
+  
+  button "Save Changes" {
+    save_csv(edited_users, "users_updated.csv")
+    text "Users saved successfully!"
+  }
+}

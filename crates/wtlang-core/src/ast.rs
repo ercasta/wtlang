@@ -57,8 +57,6 @@ pub enum Statement {
     Title(String),
     Subtitle(String),
     Text(String),
-    Show(Expr),
-    ShowEditable(Expr),
     Button { label: String, body: Vec<Statement> },
     Section { title: String, body: Vec<Statement> },
     Let { name: String, value: Expr },

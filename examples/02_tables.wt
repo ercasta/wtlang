@@ -9,9 +9,9 @@ page UserList {
   title "User Management"
   subtitle "View and manage users"
   
-  let users = load_csv("users.csv")
+  let users = load_csv("users.csv", User)
   
-  show users
+  show(users)
   
   button "Export to Excel" {
     export_excel(users, "users_export.xlsx")

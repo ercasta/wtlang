@@ -215,13 +215,15 @@ This first implementation has some limitations:
 
 1. **Lambda expressions**: Not fully implemented in code generation
 2. **Complex filtering**: `filter()` with lambda needs better translation
-3. **Type checking**: Not yet implemented
+3. **Type checking**: Not yet implemented (runtime validation added for load_csv)
 4. **Error messages**: Basic, need improvement for user-friendliness
 5. **Standard library**: Limited to core functions
 6. **Tests**: Test keyword parsed but not generated
 7. **Imports**: Not yet implemented
 
 ✓ **External functions**: Now fully implemented with import generation
+✓ **CSV Validation**: load_csv validates table structure at runtime
+✓ **show/show_editable**: Converted to built-in functions, show_editable returns edited table
 
 ## Future Improvements
 

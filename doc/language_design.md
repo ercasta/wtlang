@@ -221,6 +221,100 @@ let pipeline = sorter -> filter_adult
 ### Rationale
 First-class functions align with the functional programming paradigm and enable powerful composition patterns. The ability to store, pass, and manipulate function chains is essential for building reusable data transformation pipelines. While this requires more sophisticated language design, it significantly enhances expressiveness.
 
+## 11. Testing Support
+
+### Alternatives Considered
+
+**A. No Built-in Testing Support**
+- Pros: Simpler language, users choose their own tools
+- Cons: Inconsistent testing approaches, poor testability
+
+**B. External Testing Framework Only**
+- Pros: Leverage existing tools (pytest for generated Python)
+- Cons: Tests written in different language, no WTLang-specific assertions
+
+**C. Built-in Testing Constructs (Chosen)**
+```wtlang
+test "filter removes rows correctly" {
+  let users = table_from([
+    {name: "Alice", age: 25},
+    {name: "Bob", age: 17}
+  ])
+  let adults = users -> filter(_, row => row.age >= 18)
+  
+  assert adults.count() == 1
+  assert adults[0].name == "Alice"
+}
+
+test "chain composition" {
+  let pipeline = sort(_, "name") -> filter(_, row => row.age >= 18)
+  let result = test_data -> pipeline
+  
+  assert_table_equals(result, expected_data)
+}
+```
+- Pros: Tests in same language, domain-specific assertions, integrated tooling
+- Cons: More language complexity, requires test runner
+
+**D. Property-based Testing Support**
+```wtlang
+property "sorting preserves all rows" {
+  forall table: Table<User> {
+    let sorted = table -> sort(_, "name")
+    assert sorted.count() == table.count()
+  }
+}
+```
+- Pros: Finds edge cases, formal verification
+- Cons: Significant complexity, harder for non-experts
+
+### Rationale
+Built-in testing support is essential for a language targeting business applications where correctness is critical. Key features:
+
+1. **Test Blocks**: First-class `test` keyword for defining test cases
+2. **Assertions**: Domain-specific assertions for tables (`assert_table_equals`, `assert_contains`, etc.)
+3. **Mock External Functions**: Easy mocking for external Python functions during testing
+4. **Test Data Builders**: Utilities to create test tables quickly
+5. **Coverage**: Compiler can track which code paths are tested
+
+**Testing Philosophy:**
+- **Unit Testing**: Test individual functions and transformations
+- **Integration Testing**: Test complete page workflows
+- **Mock External Functions**: Isolate WTLang logic from Python dependencies
+- **Deterministic**: Immutability ensures tests are reproducible
+
+**Example Test Structure:**
+```wtlang
+import users_module from "./users"
+
+// Mock external function
+mock external analyze_sentiment(text: string) -> float {
+  if text == "good" return 0.8
+  if text == "bad" return 0.2
+  return 0.5
+}
+
+test "sentiment filter works" {
+  let comments = table_from([
+    {id: 1, text: "good"},
+    {id: 2, text: "bad"}
+  ])
+  
+  let positive = comments -> filter(_, row => analyze_sentiment(row.text) > 0.5)
+  
+  assert positive.count() == 1
+  assert positive[0].id == 1
+}
+```
+
+**Compiler Support:**
+- `wtc test` command runs all tests in a project
+- Tests compile to pytest-compatible Python tests
+- IDE integration shows test results inline
+- Coverage reports identify untested code paths
+
+The immutability and pure function design of WTLang makes testing natural—functions always produce the same output for the same input, with no hidden state or side effects.
+
 ## Summary
 
 WTLang's design prioritizes:
@@ -228,5 +322,6 @@ WTLang's design prioritizes:
 2. **Readability** through pipeline syntax and explicit scoping
 3. **Productivity** through rich standard library and function composition
 4. **Focus** by constraining to the table manipulation domain
+5. **Testability** through built-in testing constructs and deterministic behavior
 
 These choices create a language that is both powerful for its intended use case and accessible to users who may not be professional developers but need to work with tabular data in web applications.

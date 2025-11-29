@@ -257,6 +257,9 @@ Implementing the Language Server Protocol ensures WTLang works in any modern edi
 - Code actions (quick fixes)
 - Semantic tokens
 - Call hierarchy
+- **Test running integration**: Run tests from editor with inline results
+- **Test debugging**: Set breakpoints in test blocks
+- **Test coverage visualization**: Show which lines are tested
 
 ## 7. External Function Autocompletion
 
@@ -352,6 +355,13 @@ enum Commands {
     Build { input: PathBuf, output: PathBuf },
     Check { input: PathBuf },
     Format { input: PathBuf },
+    Test { 
+        input: PathBuf,
+        #[arg(long)]
+        watch: bool,
+        #[arg(long)]
+        coverage: bool,
+    },
     Lsp,
 }
 ```
@@ -365,6 +375,8 @@ Use Cargo as the build system for the compiler itself, and provide a user-friend
 wtc build src/main.wt --output dist/
 wtc check src/main.wt
 wtc format src/main.wt
+wtc test src/ --watch          # Run tests in watch mode
+wtc test src/ --coverage       # Generate coverage report
 wtc lsp  # Start Language Server
 wtc init my-project  # Scaffold new project
 ```
@@ -423,11 +435,72 @@ fn fuzz_parser(data: &[u8]) {
 - Cons: Requires setup, CI integration
 
 ### Rationale
-Multi-level testing strategy:
+Multi-level testing strategy for the compiler itself:
 1. **Unit tests**: Parser, type checker, code generator components
 2. **Integration tests**: End-to-end compilation of sample programs
 3. **Snapshot tests**: Verify generated code doesn't change unexpectedly (using `insta`)
 4. **Fuzzing**: Ensure parser robustness (using `cargo-fuzz`)
+5. **Regression tests**: Archive of bug-reproducing test cases
+
+**Additional Testing for User Code Compilation:**
+```rust
+// Test that WTLang test blocks compile to pytest
+#[test]
+fn test_wtlang_test_compilation() {
+    let wtlang_src = r#"
+        test "example" {
+            let x = 5
+            assert x == 5
+        }
+    "#;
+    
+    let python_output = compile(wtlang_src).unwrap();
+    
+    // Verify pytest-compatible output
+    assert!(python_output.contains("def test_example():"));
+    assert!(python_output.contains("assert x == 5"));
+}
+
+// Test mock function generation
+#[test]
+fn test_mock_external_function() {
+    let wtlang_src = r#"
+        mock external process(x: int) -> int {
+            return x * 2
+        }
+    "#;
+    
+    let python_output = compile(wtlang_src).unwrap();
+    assert!(python_output.contains("@patch"));
+}
+```
+
+**WTLang User Testing Support:**
+The compiler must support the `test` keyword and compile it to pytest:
+
+```wtlang
+// user_code.wt
+test "sorting works" {
+    let data = table_from([{id: 2}, {id: 1}])
+    let sorted = data -> sort(_, "id")
+    assert sorted[0].id == 1
+}
+```
+
+Compiles to:
+```python
+# user_code_test.py
+def test_sorting_works():
+    data = pd.DataFrame([{"id": 2}, {"id": 1}])
+    sorted_data = data.sort_values("id")
+    assert sorted_data.iloc[0]["id"] == 1
+```
+
+The `wtc test` command:
+1. Compiles WTLang test blocks to Python pytest functions
+2. Runs pytest with appropriate fixtures and mocks
+3. Reports results in WTLang-friendly format
+4. Integrates with LSP for in-editor test running
 
 This catches bugs at all levels while maintaining fast development iteration.
 

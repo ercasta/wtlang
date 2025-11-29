@@ -74,6 +74,38 @@ impl CodeGenerator {
         
         code.push_str("\n");
         
+        // Helper function for filtered show/show_editable
+        code.push_str("def _show_filtered(df, filters, editable=False, key_prefix=''):\n");
+        code.push_str("    \"\"\"Show dataframe with optional filters\"\"\"\n");
+        code.push_str("    # Create filter widgets (3 per row)\n");
+        code.push_str("    filter_values = []\n");
+        code.push_str("    num_filters = len(filters)\n");
+        code.push_str("    for i in range(0, num_filters, 3):\n");
+        code.push_str("        cols = st.columns(min(3, num_filters - i))\n");
+        code.push_str("        for j, (col_name, mode) in enumerate(filters[i:i+3]):\n");
+        code.push_str("            if mode == 'single':\n");
+        code.push_str("                val = cols[j].selectbox(col_name, ['All'] + sorted(df[col_name].unique().astype(str).tolist()), key=f'{key_prefix}_f_{i+j}')\n");
+        code.push_str("                filter_values.append((col_name, mode, val))\n");
+        code.push_str("            else:  # multi\n");
+        code.push_str("                val = cols[j].multiselect(col_name, sorted(df[col_name].unique().astype(str).tolist()), key=f'{key_prefix}_f_{i+j}')\n");
+        code.push_str("                filter_values.append((col_name, mode, val))\n");
+        code.push_str("    \n");
+        code.push_str("    # Apply filters\n");
+        code.push_str("    filtered = df\n");
+        code.push_str("    for col_name, mode, val in filter_values:\n");
+        code.push_str("        if mode == 'single' and val != 'All':\n");
+        code.push_str("            filtered = filtered[filtered[col_name].astype(str) == val]\n");
+        code.push_str("        elif mode == 'multi' and val:\n");
+        code.push_str("            filtered = filtered[filtered[col_name].astype(str).isin(val)]\n");
+        code.push_str("    \n");
+        code.push_str("    # Display\n");
+        code.push_str("    if editable:\n");
+        code.push_str("        return st.data_editor(filtered, key=f'{key_prefix}_editor', use_container_width=True)\n");
+        code.push_str("    else:\n");
+        code.push_str("        st.dataframe(filtered)\n");
+        code.push_str("        return None\n");
+        code.push_str("\n");
+        
         // Page configuration
         code.push_str(&format!("# Page: {}\n", page.name));
         code.push_str("\n");
@@ -428,91 +460,23 @@ impl CodeGenerator {
         }
 
         let key = self.get_unique_key();
-        let mut code = String::new();
         
-        // Use an IIFE (Immediately Invoked Function Expression) to wrap everything
-        code.push_str("(lambda: (\n");
+        // Build filter list as Python code
+        let filter_list: Vec<String> = filters.iter().map(|f| {
+            let mode = match f.mode {
+                FilterMode::Single => "single",
+                FilterMode::Multi => "multi",
+            };
+            format!("('{}', '{}')", f.column, mode)
+        }).collect();
         
-        // Store the dataframe in a temp variable
-        code.push_str(&format!("    __df := {},\n", df_expr));
-        
-        // Generate filter widgets in columns (3 per row)
-        let filters_per_row = 3;
-        let num_rows = (filters.len() + filters_per_row - 1) / filters_per_row;
-        
-        for row in 0..num_rows {
-            let start_idx = row * filters_per_row;
-            let end_idx = std::cmp::min(start_idx + filters_per_row, filters.len());
-            let cols_in_row = end_idx - start_idx;
-            
-            code.push_str(&format!("    __cols{} := st.columns({}),\n", row, cols_in_row));
-            
-            for (col_idx, filter_idx) in (start_idx..end_idx).enumerate() {
-                let filter = &filters[filter_idx];
-                let filter_var = format!("__flt{}", filter_idx);
-                
-                match filter.mode {
-                    FilterMode::Single => {
-                        code.push_str(&format!(
-                            "    {} := __cols{}[{}].selectbox('{}', ['All'] + sorted(__df['{}'].unique().astype(str).tolist()), key='f_{}_{}'),\n",
-                            filter_var, row, col_idx, filter.column, filter.column, key, filter_idx
-                        ));
-                    }
-                    FilterMode::Multi => {
-                        code.push_str(&format!(
-                            "    {} := __cols{}[{}].multiselect('{}', sorted(__df['{}'].unique().astype(str).tolist()), key='f_{}_{}'),\n",
-                            filter_var, row, col_idx, filter.column, filter.column, key, filter_idx
-                        ));
-                    }
-                }
-            }
-        }
-        
-        // Apply filters to create filtered dataframe
-        code.push_str("    __filtered := __df");
-        for (i, filter) in filters.iter().enumerate() {
-            let filter_var = format!("__flt{}", i);
-            code.push_str(",\n");
-            match filter.mode {
-                FilterMode::Single => {
-                    code.push_str(&format!(
-                        "    __filtered := __filtered if {} == 'All' else __filtered[__filtered['{}'].astype(str) == {}]",
-                        filter_var, filter.column, filter_var
-                    ));
-                }
-                FilterMode::Multi => {
-                    code.push_str(&format!(
-                        "    __filtered := __filtered if not {} else __filtered[__filtered['{}'].astype(str).isin({})]",
-                        filter_var, filter.column, filter_var
-                    ));
-                }
-            }
-        }
-        code.push_str(",\n");
-        
-        // Display or edit the filtered data and return the result
-        if is_editable {
-            code.push_str(&format!(
-                "    st.data_editor(__filtered, key='editor_{}', use_container_width=True)\n",
-                key
-            ));
-        } else {
-            code.push_str("    st.dataframe(__filtered),\n");
-            code.push_str("    None  # Return None for non-editable show\n");
-        }
-        
-        // Calculate the index to extract from the tuple
-        // Elements: __df (1) + cols rows (num_rows) + filters (filters.len()) + __filtered initial (1) + __filtered updates (filters.len()) + result (1 for editable, 2 for non-editable with None)
-        let result_idx = if is_editable {
-            // Return the st.data_editor result
-            1 + num_rows + filters.len() + 1 + filters.len()
-        } else {
-            // Return the None (last element)
-            1 + num_rows + filters.len() + 1 + filters.len() + 2 - 1
-        };
-        
-        code.push_str(&format!(")[{}])()", result_idx));
-        
-        Ok(code)
+        // Call the helper function
+        Ok(format!(
+            "_show_filtered({}, [{}], editable={}, key_prefix='f_{}')",
+            df_expr,
+            filter_list.join(", "),
+            if is_editable { "True" } else { "False" },
+            key
+        ))
     }
 }

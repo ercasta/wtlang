@@ -1,0 +1,39 @@
+table Order {
+  order_id: int [unique, non_null]
+  customer: string [non_null]
+  amount: float
+  status: string
+}
+
+page Dashboard {
+  title "Order Dashboard"
+  
+  let orders = load_csv("orders.csv")
+  let total_orders = count(orders)
+  let total_revenue = sum(orders, "amount")
+  
+  text "Total Orders: {total_orders}"
+  text "Total Revenue: ${total_revenue}"
+  
+  if total_revenue > 10000 {
+    text "🎉 Great performance this month!"
+  }
+  
+  show orders
+}
+
+page OrderManagement {
+  title "Manage Orders"
+  
+  let orders = load_csv("orders.csv")
+  
+  show_editable orders
+  
+  button "Save Changes" {
+    save_csv(orders, "orders.csv")
+  }
+  
+  button "Export Report" {
+    export_excel(orders, "orders_report.xlsx")
+  }
+}

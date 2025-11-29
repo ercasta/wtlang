@@ -1,0 +1,11 @@
+order_id,customer,amount,status
+1,Alice Johnson,1299.99,completed
+2,Bob Smith,29.99,pending
+3,Carol Davis,399.99,completed
+4,David Wilson,249.99,shipped
+5,Eve Martinez,14.99,completed
+6,Alice Johnson,349.99,completed
+7,Bob Smith,45.99,pending
+8,Carol Davis,89.99,shipped
+9,David Wilson,129.99,completed
+10,Eve Martinez,79.99,completed

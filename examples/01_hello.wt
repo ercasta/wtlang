@@ -1,0 +1,6 @@
+page Home {
+  title "Hello WTLang!"
+  subtitle "My First Application"
+  
+  text "Welcome to WTLang - a language for creating table-based web applications."
+}

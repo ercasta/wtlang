@@ -1,0 +1,18 @@
+[package]
+name = "wtlang"
+version = "0.1.0"
+edition = "2021"
+authors = ["WTLang Contributors"]
+description = "A Domain Specific Language for creating web table applications"
+license = "MIT"
+
+[[bin]]
+name = "wtc"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+anyhow = "1.0"
+thiserror = "1.0"
+
+[dev-dependencies]

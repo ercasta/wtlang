@@ -1,0 +1,34 @@
+table Product {
+  id: int [unique, non_null]
+  name: string [non_null]
+  category: string
+  price: float
+  stock: int
+}
+
+page ProductAnalysis {
+  title "Product Analysis"
+  subtitle "Filter and analyze product data"
+  
+  let products = load_csv("products.csv")
+  
+  section "All Products" {
+    show products
+    
+    let total_products = count(products)
+    text "Total Products: {total_products}"
+  }
+  
+  section "Expensive Products" {
+    let expensive = products -> sort_desc(_, "price")
+    show expensive
+  }
+  
+  section "Summary Statistics" {
+    let avg_price = average(products, "price")
+    let total_stock = sum(products, "stock")
+    
+    text "Average Price: ${avg_price}"
+    text "Total Stock: {total_stock} units"
+  }
+}

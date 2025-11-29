@@ -1,0 +1,19 @@
+table User {
+  id: int [unique, non_null]
+  name: string [non_null]
+  email: string
+  age: int
+}
+
+page UserList {
+  title "User Management"
+  subtitle "View and manage users"
+  
+  let users = load_csv("users.csv")
+  
+  show users
+  
+  button "Export to Excel" {
+    export_excel(users, "users_export.xlsx")
+  }
+}

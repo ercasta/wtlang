@@ -1,4 +1,4 @@
-# WTLang
+# WTLang - Web Table Language
 
 **A Domain Specific Language for creating web-based table applications**
 
@@ -12,20 +12,44 @@ WTLang allows you to quickly build interactive web applications for displaying a
 - 🔒 **Type Safe**: Strong static typing prevents runtime errors
 - 🚀 **Compiles to Streamlit**: Generates production-ready Python code
 - 📦 **Immutable Data**: Functional programming principles for predictable behavior
+- 🛠️ **IDE Support**: Full Language Server Protocol (LSP) implementation with VSCode extension
+
+## Project Structure
+
+This is a Cargo workspace containing:
+
+- **`crates/wtlang-core`**: Core library with lexer, parser, and AST
+- **`crates/wtlang-compiler`**: The `wtc` compiler (WTLang → Python/Streamlit)
+- **`crates/wtlang-lsp`**: Language Server Protocol implementation
+- **`vscode-extension/`**: Visual Studio Code extension for WTLang
+- **`examples/`**: Example WTLang programs
+- **`doc/`**: Comprehensive documentation
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/wtlang.git
-cd wtlang
-
-# Build the compiler (requires Rust)
-cargo build --release
+# Build the compiler
+cargo build --release -p wtlang-compiler
 
 # The compiler binary will be at target/release/wtc
+```
+
+### Optional: Install Language Server & VSCode Extension
+
+For IDE support with syntax highlighting, diagnostics, and auto-completion:
+
+```bash
+# Build the language server
+cargo build --release -p wtlang-lsp
+
+# Install and configure the VSCode extension
+# See doc/lsp_installation.md for complete instructions
+cd vscode-extension
+npm install
+npm run compile
+npm run package
 ```
 
 ### Hello World
@@ -175,6 +199,46 @@ wtlang/
 └── Cargo.toml        # Rust project configuration
 ```
 
+## Documentation
+
+- **[Language Design](doc/language_design.md)**: Complete language specification
+- **[Target Platform Design](doc/target_platform_design.md)**: Streamlit mapping details
+- **[Compiler & Tools Design](doc/compiler_tools_design.md)**: Architecture and implementation
+- **[Tutorial](doc/tutorial.md)**: Step-by-step guide to WTLang
+- **[LSP Installation](doc/lsp_installation.md)**: Complete LSP and VSCode setup guide
+
+## CLI Usage
+
+### Build Command
+
+Compile WTLang source to Python/Streamlit:
+
+```bash
+wtc build <input.wt> [-o <output-dir>]
+```
+
+Options:
+- `-o, --output <DIR>`: Output directory (default: `output/`)
+
+### Check Command
+
+Check source for errors without generating code:
+
+```bash
+wtc check <input.wt>
+```
+
+## Examples
+
+See the `examples/` directory:
+
+- **01_hello.wt**: Simple "Hello World" page
+- **02_tables.wt**: Loading and displaying CSV data
+- **03_chaining.wt**: Function chaining and filtering
+- **04_multi_page.wt**: Multi-page application
+
+Each example includes sample data in `examples/data/`.
+
 ## Development Status
 
 **Version 0.1** - First Implementation
@@ -182,22 +246,24 @@ wtlang/
 ✅ Completed:
 - Lexer and tokenizer
 - Parser with full AST support
-- Basic code generator (Streamlit output)
+- Code generator (Streamlit output)
 - CLI with build and check commands
 - Core language features (tables, pages, functions, chaining)
-- Example programs
+- Multi-tool architecture with shared core library
+- **Language Server Protocol (LSP) implementation**
+- **VSCode extension with syntax highlighting and diagnostics**
+- Example programs and documentation
 
 🚧 In Progress:
 - Type checker and semantic analysis
 - Error reporting improvements
 - Extended standard library
-- External function integration
 
 📋 Planned:
-- Language Server Protocol (LSP) for IDE support
 - Testing framework (`test` blocks → pytest)
 - Module/import system
 - Advanced optimizations
+- Hover information and go-to-definition in LSP
 - Additional target platforms
 
 ## Requirements

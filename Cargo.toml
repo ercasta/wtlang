@@ -1,18 +1,22 @@
-[package]
-name = "wtlang"
+[workspace]
+members = [
+    "crates/wtlang-core",
+    "crates/wtlang-compiler",
+    "crates/wtlang-lsp",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
 authors = ["WTLang Contributors"]
-description = "A Domain Specific Language for creating web table applications"
 license = "MIT"
 
-[[bin]]
-name = "wtc"
-path = "src/main.rs"
-
-[dependencies]
+[workspace.dependencies]
+# Shared dependencies
 clap = { version = "4.4", features = ["derive"] }
 anyhow = "1.0"
 thiserror = "1.0"
-
-[dev-dependencies]
+tower-lsp = "0.20"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

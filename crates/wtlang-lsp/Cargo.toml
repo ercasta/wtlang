@@ -1,0 +1,19 @@
+[package]
+name = "wtlang-lsp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "wtlang-lsp"
+path = "src/main.rs"
+
+[dependencies]
+wtlang-core = { path = "../wtlang-core" }
+tower-lsp.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true

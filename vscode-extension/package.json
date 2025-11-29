@@ -1,0 +1,75 @@
+{
+  "name": "wtlang",
+  "displayName": "WTLang",
+  "description": "Language support for WTLang - Web Table Language",
+  "version": "0.1.0",
+  "publisher": "wtlang-dev",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:wtlang"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "wtlang",
+        "aliases": [
+          "WTLang",
+          "wtlang"
+        ],
+        "extensions": [
+          ".wt"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "wtlang",
+        "scopeName": "source.wtlang",
+        "path": "./syntaxes/wtlang.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "WTLang",
+      "properties": {
+        "wtlang.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the wtlang-lsp server executable. If empty, will search in PATH."
+        },
+        "wtlang.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.19.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

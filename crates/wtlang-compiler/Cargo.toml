@@ -1,0 +1,16 @@
+[package]
+name = "wtlang-compiler"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "wtc"
+path = "src/main.rs"
+
+[dependencies]
+wtlang-core = { path = "../wtlang-core" }
+clap.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true

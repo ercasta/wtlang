@@ -1,0 +1,25 @@
+external function calculate_tax(amount: number, rate: number) -> number from "tax_utils"
+external function format_currency(value: number) -> string from "formatters"
+external function validate_email(email: string) -> bool from "validators"
+
+table Order {
+    id: int
+    amount: float
+    tax_rate: float
+}
+
+page TaxCalculator {
+    title "Tax Calculator"
+    
+    let orders = load_csv("orders.csv")
+    
+    section "Orders with Tax" {
+        show orders
+        
+        let first_order_amount = 100.0
+        let tax_amount = calculate_tax(first_order_amount, 0.15)
+        let formatted = format_currency(tax_amount)
+        
+        text "Tax on $100: {formatted}"
+    }
+}

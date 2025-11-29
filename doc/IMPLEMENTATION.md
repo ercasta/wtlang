@@ -218,9 +218,10 @@ This first implementation has some limitations:
 3. **Type checking**: Not yet implemented
 4. **Error messages**: Basic, need improvement for user-friendliness
 5. **Standard library**: Limited to core functions
-6. **External functions**: Declaration parsing works, but not code generation
-7. **Tests**: Test keyword parsed but not generated
-8. **Imports**: Not yet implemented
+6. **Tests**: Test keyword parsed but not generated
+7. **Imports**: Not yet implemented
+
+✓ **External functions**: Now fully implemented with import generation
 
 ## Future Improvements
 
@@ -230,12 +231,10 @@ For the next iteration:
 2. Improve error messages with source location context
 3. Add lambda expression support in code generation
 4. Expand standard library coverage
-5. Implement external function integration
-6. Add test generation (WTLang tests → pytest)
-7. Implement module/import system
-8. Add optimization passes
-9. Create Language Server Protocol implementation
-10. Build comprehensive test suite
+5. Add test generation (WTLang tests → pytest)
+6. Implement module/import system
+7. Add optimization passes
+8. Build comprehensive test suite
 
 ## Files Created
 

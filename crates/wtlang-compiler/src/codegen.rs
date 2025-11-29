@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub struct CodeGenerator {
     indent_level: usize,
     table_defs: HashMap<String, TableDef>,
+    external_functions: HashMap<String, ExternalFunction>,
 }
 
 impl CodeGenerator {
@@ -12,16 +13,23 @@ impl CodeGenerator {
         CodeGenerator {
             indent_level: 0,
             table_defs: HashMap::new(),
+            external_functions: HashMap::new(),
         }
     }
 
     pub fn generate(&mut self, program: &Program) -> Result<HashMap<String, String>, String> {
         let mut output_files = HashMap::new();
         
-        // First pass: collect table definitions
+        // First pass: collect table definitions and external functions
         for item in &program.items {
-            if let ProgramItem::TableDef(table_def) = item {
-                self.table_defs.insert(table_def.name.clone(), table_def.clone());
+            match item {
+                ProgramItem::TableDef(table_def) => {
+                    self.table_defs.insert(table_def.name.clone(), table_def.clone());
+                }
+                ProgramItem::ExternalFunction(ext_fn) => {
+                    self.external_functions.insert(ext_fn.name.clone(), ext_fn.clone());
+                }
+                _ => {}
             }
         }
         
@@ -39,10 +47,29 @@ impl CodeGenerator {
     fn generate_page(&mut self, page: &Page) -> Result<String, String> {
         let mut code = String::new();
         
-        // Imports
+        // Standard imports
         code.push_str("import streamlit as st\n");
         code.push_str("import pandas as pd\n");
         code.push_str("from datetime import datetime\n");
+        
+        // External function imports
+        // Group by module to generate clean imports
+        let mut modules: HashMap<String, Vec<String>> = HashMap::new();
+        for (func_name, ext_fn) in &self.external_functions {
+            modules.entry(ext_fn.module.clone())
+                .or_insert_with(Vec::new)
+                .push(func_name.clone());
+        }
+        
+        // Generate import statements
+        for (module, functions) in modules {
+            if functions.len() == 1 {
+                code.push_str(&format!("from {} import {}\n", module, functions[0]));
+            } else {
+                code.push_str(&format!("from {} import {}\n", module, functions.join(", ")));
+            }
+        }
+        
         code.push_str("\n");
         
         // Page configuration

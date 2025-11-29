@@ -67,7 +67,9 @@ impl Parser {
         match &token.token_type {
             TokenType::Int => Ok(Type::Int),
             TokenType::Float => Ok(Type::Float),
+            TokenType::Number => Ok(Type::Float),  // number is alias for float
             TokenType::String => Ok(Type::String),
+            TokenType::Text => Ok(Type::String),  // text keyword also valid as type
             TokenType::Date => Ok(Type::Date),
             TokenType::Currency => Ok(Type::Currency),
             TokenType::Bool => Ok(Type::Bool),

@@ -236,6 +236,7 @@ See the `examples/` directory:
 - **02_tables.wt**: Loading and displaying CSV data
 - **03_chaining.wt**: Function chaining and filtering
 - **04_multi_page.wt**: Multi-page application
+- **05_external_functions.wt**: External function declarations and imports
 
 Each example includes sample data in `examples/data/`.
 

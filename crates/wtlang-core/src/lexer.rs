@@ -32,6 +32,7 @@ pub enum TokenType {
     Date,
     Currency,
     Bool,
+    Number,     // Alias for Float
     
     // Literals
     IntLiteral(i64),
@@ -357,6 +358,7 @@ impl Lexer {
             "date" => TokenType::Date,
             "currency" => TokenType::Currency,
             "bool" => TokenType::Bool,
+            "number" => TokenType::Number,
             "true" => TokenType::BoolLiteral(true),
             "false" => TokenType::BoolLiteral(false),
             _ => TokenType::Identifier(value),

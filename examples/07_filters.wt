@@ -11,7 +11,7 @@ page EmployeeViewer {
     title "Employee Management with Filters"
     
     // Load employee data
-    let employees = load_csv("employees.csv", Employee)
+    let employees = load_csv("data/employees.csv", Employee)
     
     // Show with single filter on department
     show(employees, [filter("department", single)])

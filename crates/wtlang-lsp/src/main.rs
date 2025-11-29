@@ -110,14 +110,7 @@ impl LanguageServer for WTLangServer {
                     ..Default::default()
                 }),
                 definition_provider: Some(OneOf::Left(true)),
-                diagnostic_provider: Some(DiagnosticServerCapabilities::Options(
-                    DiagnosticOptions {
-                        identifier: Some("wtlang".to_string()),
-                        inter_file_dependencies: false,
-                        workspace_diagnostics: false,
-                        ..Default::default()
-                    },
-                )),
+                // We use push diagnostics (publish_diagnostics), not pull diagnostics
                 ..Default::default()
             },
             server_info: Some(ServerInfo {

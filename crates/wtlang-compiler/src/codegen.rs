@@ -192,15 +192,15 @@ impl CodeGenerator {
                 // Replace _ in right with left_code
                 match right.as_ref() {
                     Expr::FunctionCall(call) => {
-                        let mut args = Vec::new();
-                        for arg in &call.args {
+                        // Create a new function call with _ replaced by the left side
+                        let mut new_call = call.clone();
+                        for arg in &mut new_call.args {
                             if matches!(arg, Expr::Identifier(name) if name == "_") {
-                                args.push(left_code.clone());
-                            } else {
-                                args.push(self.generate_expr(arg)?);
+                                *arg = Expr::Identifier(left_code.clone());
                             }
                         }
-                        Ok(format!("{}({})", call.name, args.join(", ")))
+                        // Use generate_function_call to handle special functions properly
+                        self.generate_function_call(&new_call)
                     },
                     _ => Err("Chain right side must be a function call".to_string()),
                 }

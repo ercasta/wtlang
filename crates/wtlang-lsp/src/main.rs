@@ -43,9 +43,12 @@ impl WTLangServer {
         };
 
         let mut diagnostics = Vec::new();
+        let source = doc.source.clone();
+        let version = doc.version;
+        drop(docs);
 
         // Lexical analysis
-        let mut lexer = Lexer::new(&doc.source);
+        let mut lexer = Lexer::new(&source);
         match lexer.tokenize() {
             Ok(tokens) => {
                 // Parsing
@@ -89,8 +92,7 @@ impl WTLangServer {
             }
         }
 
-        drop(docs);
-        self.client.publish_diagnostics(uri, diagnostics, Some(doc.version)).await;
+        self.client.publish_diagnostics(uri, diagnostics, Some(version)).await;
     }
 }
 

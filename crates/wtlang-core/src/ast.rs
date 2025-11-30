@@ -72,9 +72,15 @@ pub enum Statement {
     Text(String),
     Button { label: String, body: Vec<Statement> },
     Section { title: String, body: Vec<Statement> },
-    Let { name: String, value: Expr },
+    Let { 
+        name: String, 
+        type_annotation: Option<Type>,  // Optional type annotation
+        value: Option<Expr>  // Value is now optional (for declarations without initialization)
+    },
+    Assign { name: String, value: Expr },  // Assignment to existing variable
     If { condition: Expr, then_branch: Vec<Statement>, else_branch: Option<Vec<Statement>> },
     Forall { var: String, iterable: Expr, body: Vec<Statement> },
+    Return(Expr),
     FunctionCall(FunctionCall),
 }
 

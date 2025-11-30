@@ -4,8 +4,12 @@
 pub mod lexer;
 pub mod ast;
 pub mod parser;
+pub mod symbols;
+pub mod semantics;
 
 // Re-export commonly used types
 pub use lexer::{Lexer, Token, TokenType};
 pub use ast::*;
 pub use parser::Parser;
+pub use symbols::{Symbol, SymbolTable, SymbolKind, SymbolError, ScopeKind};
+pub use semantics::{SemanticAnalyzer, SemanticError};

@@ -1,6 +1,6 @@
 mod codegen;
 
-use wtlang_core::{Lexer, Parser};
+use wtlang_core::{Lexer, Parser, SemanticAnalyzer};
 use clap::{Parser as ClapParser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
@@ -67,6 +67,18 @@ fn build_command(input: PathBuf, output: PathBuf) -> Result<()> {
     
     println!("Successfully parsed {} items", program.items.len());
     
+    // Semantic analysis
+    let mut analyzer = SemanticAnalyzer::new();
+    if let Err(errors) = analyzer.analyze(&program) {
+        eprintln!("\nSemantic errors found:");
+        for error in &errors {
+            eprintln!("  - {}", error);
+        }
+        return Err(anyhow::anyhow!("Semantic analysis failed with {} error(s)", errors.len()));
+    }
+    
+    println!("✓ Semantic analysis passed");
+    
     // Code generation
     let mut codegen = codegen::CodeGenerator::new();
     let output_files = codegen.generate(&program)
@@ -120,6 +132,18 @@ fn check_command(input: PathBuf) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Parser error: {}", e))?;
     
     println!("✓ Parsing passed ({} items)", program.items.len());
+    
+    // Semantic analysis
+    let mut analyzer = SemanticAnalyzer::new();
+    if let Err(errors) = analyzer.analyze(&program) {
+        eprintln!("\nSemantic errors found:");
+        for error in &errors {
+            eprintln!("  - {}", error);
+        }
+        return Err(anyhow::anyhow!("Semantic analysis failed with {} error(s)", errors.len()));
+    }
+    
+    println!("✓ Semantic analysis passed");
     println!("\n✓ No errors found!");
     
     Ok(())

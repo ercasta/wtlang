@@ -1,0 +1,14 @@
+// Simple test for type annotations
+
+table User {
+  id: int
+  name: string
+}
+
+page Test {
+  title "Test"
+  
+  let count: int = 10
+  
+  text "Count: {count}"
+}

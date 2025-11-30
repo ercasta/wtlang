@@ -1,0 +1,20 @@
+// Test declaration without initialization
+
+table User {
+  id: int
+  name: string
+}
+
+page Test {
+  title "Test"
+  
+  let result: int
+  
+  if 1 > 0 {
+    result = 100
+  } else {
+    result = 50
+  }
+  
+  text "Result: {result}"
+}

@@ -155,9 +155,32 @@ impl Parser {
             TokenType::Let => {
                 self.advance();
                 let name = self.expect_identifier()?;
-                self.expect(TokenType::Assign)?;
-                let value = self.parse_expression()?;
-                Ok(Statement::Let { name, value })
+                
+                // Check for optional type annotation
+                let type_annotation = if self.check(&TokenType::Colon) {
+                    self.advance();
+                    Some(self.parse_type()?)
+                } else {
+                    None
+                };
+                
+                // Check for optional initialization
+                let value = if self.check(&TokenType::Assign) {
+                    self.advance();
+                    Some(self.parse_expression()?)
+                } else {
+                    None
+                };
+                
+                // Must have either type annotation or value (or both)
+                if type_annotation.is_none() && value.is_none() {
+                    return Err(format!(
+                        "Variable '{}' must have either a type annotation or an initializer",
+                        name
+                    ));
+                }
+                
+                Ok(Statement::Let { name, type_annotation, value })
             },
             TokenType::If => {
                 self.advance();
@@ -184,13 +207,30 @@ impl Parser {
                 
                 Ok(Statement::If { condition, then_branch, else_branch })
             },
+            TokenType::Return => {
+                self.advance();
+                let value = self.parse_expression()?;
+                Ok(Statement::Return(value))
+            },
             TokenType::Identifier(_) => {
-                // Could be a function call
-                let expr = self.parse_expression()?;
-                if let Expr::FunctionCall(call) = expr {
+                // Could be assignment or function call
+                let name_or_expr = self.parse_expression()?;
+                
+                // Check if it's an assignment (after identifier comes =)
+                // For now, simple check: if expression is just an identifier and next token is Assign
+                if let Expr::Identifier(name) = &name_or_expr {
+                    if self.check(&TokenType::Assign) {
+                        self.advance(); // consume =
+                        let value = self.parse_expression()?;
+                        return Ok(Statement::Assign { name: name.clone(), value });
+                    }
+                }
+                
+                // Otherwise it should be a function call
+                if let Expr::FunctionCall(call) = name_or_expr {
                     Ok(Statement::FunctionCall(call))
                 } else {
-                    Err(format!("Expected function call"))
+                    Err(format!("Expected function call or assignment"))
                 }
             },
             _ => Err(format!("Unexpected token in statement: {:?}", self.peek().token_type)),

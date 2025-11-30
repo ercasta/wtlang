@@ -1,0 +1,57 @@
+// Test file for scoping and type annotations
+
+table User {
+  id: int [unique, non_null]
+  name: string
+  age: int
+}
+
+page ScopingTest {
+  title "Scoping Test"
+  
+  // Type annotation with initialization
+  let count: int = 10
+  
+  // Type inference
+  let message = "Hello"
+  
+  // Declaration without initialization
+  let result: int
+  
+  if count > 5 {
+    result = 100
+  } else {
+    result = 50
+  }
+  
+  text "Result: {result}"
+  text "Message: {message}"
+  
+  section "Nested Scope" {
+    // Can access parent scope variables
+    let doubled: int = count * 2
+    text "Count doubled: {doubled}"
+  }
+  
+  // doubled is not accessible here (out of scope)
+  
+  button "Test Button" {
+    let button_var: string = "Button clicked"
+    text "Status: {button_var}"
+  }
+}
+
+function calculate_total(value: int, multiplier: int) -> int {
+  // Function parameters are scoped to function
+  let temp: int = value * multiplier
+  return temp
+}
+
+page FunctionScopeTest {
+  title "Function Scope Test"
+  
+  let value: int = 5
+  let total: int = calculate_total(value, 3)
+  
+  text "Total: {total}"
+}

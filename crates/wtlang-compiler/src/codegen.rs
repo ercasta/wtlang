@@ -157,7 +157,18 @@ impl CodeGenerator {
                 self.indent_level -= 1;
                 Ok(code)
             },
-            Statement::Let { name, value } => {
+            Statement::Let { name, type_annotation: _, value } => {
+                // Type annotations are used for semantic analysis, not code generation
+                if let Some(val) = value {
+                    let value_code = self.generate_expr(val)?;
+                    Ok(format!("{}{} = {}\n", indent, name, value_code))
+                } else {
+                    // Declaration without initialization - initialize to None
+                    // This will be assigned later (verified by semantic analysis)
+                    Ok(format!("{}{} = None  # Will be assigned later\n", indent, name))
+                }
+            },
+            Statement::Assign { name, value } => {
                 let value_code = self.generate_expr(value)?;
                 Ok(format!("{}{} = {}\n", indent, name, value_code))
             },
@@ -179,6 +190,10 @@ impl CodeGenerator {
                     self.indent_level -= 1;
                 }
                 Ok(code)
+            },
+            Statement::Return(expr) => {
+                let expr_code = self.generate_expr(expr)?;
+                Ok(format!("{}return {}\n", indent, expr_code))
             },
             Statement::Forall { var, iterable, body } => {
                 let iter_code = self.generate_expr(iterable)?;

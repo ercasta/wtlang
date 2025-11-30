@@ -25,5 +25,18 @@
     - **Documentation Alignment**: Well-aligned overall. Needs updates to compiler_tools_design.md to reflect actual parser implementation and lack of IR. Should add codegen_design.md.
     - **Examples**: All 8 examples compile successfully and demonstrate features well. Recommended additions: error handling example, advanced pipeline example, testing example.
     - **Overall Assessment**: Production-ready for core features with excellent foundation for future development.
+16. (Done): Check some elements in the syntax. For example the documentation mentions a syntax like this for join: "on: (o, p) => o.product_id == p.product_id", that doesn't seem to be supported. Create a full syntax document for reference. Create tests for all the elements in the syntax. **Update**: Comprehensive syntax audit completed:
+    - **Syntax Reference**: Created `syntax_reference.md` - authoritative document for all implemented language constructs with EBNF grammar, examples, and known limitations.
+    - **Missing Features Identified**: The tutorial documents several features NOT yet implemented:
+      - ❌ Lambda expressions with `=>` syntax (parser doesn't support them)
+      - ❌ Named function arguments like `on: (a, b) => ...`
+      - ❌ `join()`, `select()`, `add_column()`, `group_by()`, `limit()`, `export_excel()` functions
+      - ❌ `forall` loops (keyword exists but not fully implemented)
+      - ❌ Table literal syntax `{id: 1, name: "test"}`
+      - ❌ `import` statement (shown in docs but not implemented)
+      - ❌ `validate()` and `references()` constraints (only `unique` and `non_null` work)
+    - **Supported Features**: All core features work: table definitions, pages, functions, external functions, conditionals, variables with type annotations, pipeline operator, built-in functions (load_csv, save_csv, show, show_editable, where/sort/aggregate, etc.).
+    - **Test Suite**: Created `tests/fixtures/valid/syntax_complete.wt` testing every implemented syntax element (✅ compiles successfully with 913 tokens, 17 items).
+    - **Recommendation**: Update tutorial.md to clearly mark unimplemented features, or implement missing features in future steps.
 
 

@@ -654,3 +654,366 @@ impl Parser {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::Lexer;
+
+    fn parse_source(source: &str) -> Result<Program, String> {
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize().map_err(|e| format!("Lexer error: {}", e))?;
+        let mut parser = Parser::new(tokens);
+        parser.parse()
+    }
+
+    #[test]
+    fn test_parse_simple_page() {
+        let source = r#"
+            page TestPage {
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        assert_eq!(program.items.len(), 1);
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                assert_eq!(page.name, "TestPage");
+                assert_eq!(page.statements.len(), 0);
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_table_definition() {
+        let source = r#"
+            table User {
+                id: number
+                name: string
+                active: boolean
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        assert_eq!(program.items.len(), 1);
+        
+        match &program.items[0] {
+            ProgramItem::TableDef(table) => {
+                assert_eq!(table.name, "User");
+                assert_eq!(table.fields.len(), 3);
+                assert_eq!(table.fields[0].name, "id");
+                assert_eq!(table.fields[1].name, "name");
+                assert_eq!(table.fields[2].name, "active");
+            },
+            _ => panic!("Expected TableDef item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_variable_declaration_with_type() {
+        let source = r#"
+            page Test {
+                let x: number = 42
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                assert_eq!(page.statements.len(), 1);
+                match &page.statements[0] {
+                    Statement::Let { name, type_annotation, value } => {
+                        assert_eq!(name, "x");
+                        assert!(type_annotation.is_some());
+                        assert!(value.is_some());
+                    },
+                    _ => panic!("Expected Let statement"),
+                }
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_variable_declaration_without_value() {
+        let source = r#"
+            page Test {
+                let result: number
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                match &page.statements[0] {
+                    Statement::Let { name, type_annotation, value } => {
+                        assert_eq!(name, "result");
+                        assert!(type_annotation.is_some());
+                        assert!(value.is_none());
+                    },
+                    _ => panic!("Expected Let statement"),
+                }
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_assignment_statement() {
+        let source = r#"
+            page Test {
+                let x: number
+                x = 42
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                assert_eq!(page.statements.len(), 2);
+                match &page.statements[1] {
+                    Statement::Assign { name, value } => {
+                        assert_eq!(name, "x");
+                        assert!(matches!(value, Expr::IntLiteral(_)));
+                    },
+                    _ => panic!("Expected Assign statement"),
+                }
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_function_definition() {
+        let source = r#"
+            function add(x: number, y: number) -> number {
+                return x + y
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::FunctionDef(func) => {
+                assert_eq!(func.name, "add");
+                assert_eq!(func.params.len(), 2);
+                assert_eq!(func.params[0].name, "x");
+                assert_eq!(func.params[1].name, "y");
+                // return_type is Type, not Option<Type>
+                assert_eq!(func.body.len(), 1);
+            },
+            _ => panic!("Expected FunctionDef item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_return_statement() {
+        let source = r#"
+            function test() -> number {
+                return 42
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::FunctionDef(func) => {
+                match &func.body[0] {
+                    Statement::Return(expr) => {
+                        assert!(matches!(expr, Expr::IntLiteral(42)));
+                    },
+                    _ => panic!("Expected Return statement"),
+                }
+            },
+            _ => panic!("Expected FunctionDef item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_if_statement() {
+        let source = r#"
+            page Test {
+                if true {
+                    text "yes"
+                } else {
+                    text "no"
+                }
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                match &page.statements[0] {
+                    Statement::If { condition: _, then_branch, else_branch } => {
+                        assert_eq!(then_branch.len(), 1);
+                        assert!(else_branch.is_some());
+                        assert_eq!(else_branch.as_ref().unwrap().len(), 1);
+                    },
+                    _ => panic!("Expected If statement"),
+                }
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_forall_loop() {
+        let source = r#"
+            page Test {
+                table User { id: number }
+                let users: table(User) = load_csv(User, "users.csv")
+                forall user in users {
+                    display user.id
+                }
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                // Find the forall statement
+                let forall_stmt = page.statements.iter().find(|stmt| matches!(stmt, Statement::Forall { .. }));
+                assert!(forall_stmt.is_some());
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_function_call() {
+        let source = r#"
+            page Test {
+                display(42)
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                match &page.statements[0] {
+                    Statement::FunctionCall(FunctionCall { name, args }) => {
+                        assert_eq!(name, "display");
+                        assert_eq!(args.len(), 1);
+                    },
+                    _ => panic!("Expected function call"),
+                }
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression() {
+        let source = r#"
+            page Test {
+                let result: number = 10 + 5 * 2
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                match &page.statements[0] {
+                    Statement::Let { value: Some(expr), .. } => {
+                        assert!(matches!(expr, Expr::BinaryOp { .. }));
+                    },
+                    _ => panic!("Expected Let with expression"),
+                }
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_field_access() {
+        let source = r#"
+            page Test {
+                display user.name
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::Page(page) => {
+                match &page.statements[0] {
+                    Statement::FunctionCall(FunctionCall { args, .. }) => {
+                        match &args[0] {
+                            Expr::FieldAccess { object: _, field } => {
+                                assert_eq!(field, "name");
+                            },
+                            _ => panic!("Expected field access"),
+                        }
+                    },
+                    _ => panic!("Expected function call"),
+                }
+            },
+            _ => panic!("Expected Page item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_pages() {
+        let source = r#"
+            page Page1 { }
+            page Page2 { }
+        "#;
+        let program = parse_source(source).unwrap();
+        assert_eq!(program.items.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_external_function() {
+        let source = r#"
+            external function process(data: string) -> string from "module.py"
+        "#;
+        let program = parse_source(source).unwrap();
+        
+        match &program.items[0] {
+            ProgramItem::ExternalFunction(ext) => {
+                assert_eq!(ext.name, "process");
+                assert_eq!(ext.params.len(), 1);
+                // return_type is Type, not Option<Type>
+            },
+            _ => panic!("Expected ExternalFunction item"),
+        }
+    }
+
+    #[test]
+    fn test_parse_error_missing_brace() {
+        let source = "page Test {";
+        let result = parse_source(source);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_error_unexpected_token() {
+        let source = "invalid syntax here";
+        let result = parse_source(source);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_complex_program() {
+        let source = r#"
+            table Employee {
+                id: number
+                name: string
+                salary: currency
+            }
+            
+            function calculate_bonus(salary: currency) -> currency {
+                return salary * 0.1
+            }
+            
+            page EmployeeReport {
+                let employees: table(Employee) = load_csv(Employee, "data.csv")
+                forall emp in employees {
+                    let bonus: currency = calculate_bonus(emp.salary)
+                    display emp.name
+                    display bonus
+                }
+            }
+        "#;
+        let program = parse_source(source).unwrap();
+        assert_eq!(program.items.len(), 3); // table, function, page
+    }
+}

@@ -1,0 +1,3 @@
+page Test {
+    display undefined_variable
+}

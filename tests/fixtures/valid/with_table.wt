@@ -1,0 +1,11 @@
+table User {
+    id: int
+    name: string
+    email: string
+    active: bool
+}
+
+page UserList {
+    let users: table(User) = load_csv(User, "users.csv")
+    show(users)
+}

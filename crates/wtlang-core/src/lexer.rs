@@ -419,3 +419,235 @@ impl Lexer {
         self.position >= self.input.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keywords() {
+        let mut lexer = Lexer::new("page table from display button section");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Page);
+        assert_eq!(tokens[1].token_type, TokenType::Table);
+        assert_eq!(tokens[2].token_type, TokenType::From);
+        assert_eq!(tokens[3].token_type, TokenType::Identifier("display".to_string()));
+        assert_eq!(tokens[4].token_type, TokenType::Button);
+        assert_eq!(tokens[5].token_type, TokenType::Section);
+    }
+
+    #[test]
+    fn test_type_keywords() {
+        let mut lexer = Lexer::new("number string bool date");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Number);
+        assert_eq!(tokens[1].token_type, TokenType::String);
+        assert_eq!(tokens[2].token_type, TokenType::Bool);
+        assert_eq!(tokens[3].token_type, TokenType::Date);
+    }
+
+    #[test]
+    fn test_identifiers() {
+        let mut lexer = Lexer::new("myVar my_var MyClass _private");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Identifier("myVar".to_string()));
+        assert_eq!(tokens[1].token_type, TokenType::Identifier("my_var".to_string()));
+        assert_eq!(tokens[2].token_type, TokenType::Identifier("MyClass".to_string()));
+        assert_eq!(tokens[3].token_type, TokenType::Identifier("_private".to_string()));
+    }
+
+    #[test]
+    fn test_integer_literals() {
+        let mut lexer = Lexer::new("0 42 1000");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::IntLiteral(0));
+        assert_eq!(tokens[1].token_type, TokenType::IntLiteral(42));
+        assert_eq!(tokens[2].token_type, TokenType::IntLiteral(1000));
+    }
+
+    #[test]
+    fn test_float_literals() {
+        let mut lexer = Lexer::new("3.14 0.5 10.0");
+        let tokens = lexer.tokenize().unwrap();
+        
+        match tokens[0].token_type {
+            TokenType::FloatLiteral(val) => assert!((val - 3.14).abs() < 0.001),
+            _ => panic!("Expected float literal"),
+        }
+        match tokens[1].token_type {
+            TokenType::FloatLiteral(val) => assert!((val - 0.5).abs() < 0.001),
+            _ => panic!("Expected float literal"),
+        }
+    }
+
+    #[test]
+    fn test_string_literals() {
+        let mut lexer = Lexer::new(r#""Hello, World!" "test" """#);
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::StringLiteral("Hello, World!".to_string()));
+        assert_eq!(tokens[1].token_type, TokenType::StringLiteral("test".to_string()));
+        assert_eq!(tokens[2].token_type, TokenType::StringLiteral("".to_string()));
+    }
+
+    #[test]
+    fn test_boolean_literals() {
+        let mut lexer = Lexer::new("true false");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::BoolLiteral(true));
+        assert_eq!(tokens[1].token_type, TokenType::BoolLiteral(false));
+    }
+
+    #[test]
+    fn test_operators() {
+        let mut lexer = Lexer::new("+ - * / % == != < <= > >= = ->");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Plus);
+        assert_eq!(tokens[1].token_type, TokenType::Minus);
+        assert_eq!(tokens[2].token_type, TokenType::Star);
+        assert_eq!(tokens[3].token_type, TokenType::Slash);
+        assert_eq!(tokens[4].token_type, TokenType::Percent);
+        assert_eq!(tokens[5].token_type, TokenType::Equals);
+        assert_eq!(tokens[6].token_type, TokenType::NotEquals);
+        assert_eq!(tokens[7].token_type, TokenType::LessThan);
+        assert_eq!(tokens[8].token_type, TokenType::LessThanEquals);
+        assert_eq!(tokens[9].token_type, TokenType::GreaterThan);
+        assert_eq!(tokens[10].token_type, TokenType::GreaterThanEquals);
+        assert_eq!(tokens[11].token_type, TokenType::Assign);
+        assert_eq!(tokens[12].token_type, TokenType::Arrow);
+    }
+
+    #[test]
+    fn test_delimiters() {
+        let mut lexer = Lexer::new("( ) { } [ ] , : ; .");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::LeftParen);
+        assert_eq!(tokens[1].token_type, TokenType::RightParen);
+        assert_eq!(tokens[2].token_type, TokenType::LeftBrace);
+        assert_eq!(tokens[3].token_type, TokenType::RightBrace);
+        assert_eq!(tokens[4].token_type, TokenType::LeftBracket);
+        assert_eq!(tokens[5].token_type, TokenType::RightBracket);
+        assert_eq!(tokens[6].token_type, TokenType::Comma);
+        assert_eq!(tokens[7].token_type, TokenType::Colon);
+        assert_eq!(tokens[8].token_type, TokenType::Semicolon);
+        assert_eq!(tokens[9].token_type, TokenType::Dot);
+    }
+
+    #[test]
+    fn test_comments() {
+        let mut lexer = Lexer::new("page // this is a comment\ntable");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Page);
+        assert_eq!(tokens[1].token_type, TokenType::Table);
+        assert_eq!(tokens.len(), 3); // page, table, EOF
+    }
+
+    #[test]
+    fn test_position_tracking() {
+        let mut lexer = Lexer::new("page\ntable");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].line, 1);
+        assert_eq!(tokens[0].column, 1);
+        assert_eq!(tokens[1].line, 2);
+        assert_eq!(tokens[1].column, 1);
+    }
+
+    #[test]
+    fn test_unterminated_string() {
+        let mut lexer = Lexer::new(r#""unterminated"#);
+        let result = lexer.tokenize();
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unterminated string"));
+    }
+
+    #[test]
+    fn test_complex_expression() {
+        let mut lexer = Lexer::new("let x: number = 42 + 3.14");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Let);
+        assert_eq!(tokens[1].token_type, TokenType::Identifier("x".to_string()));
+        assert_eq!(tokens[2].token_type, TokenType::Colon);
+        assert_eq!(tokens[3].token_type, TokenType::Number);
+        assert_eq!(tokens[4].token_type, TokenType::Assign);
+        assert_eq!(tokens[5].token_type, TokenType::IntLiteral(42));
+        assert_eq!(tokens[6].token_type, TokenType::Plus);
+        match tokens[7].token_type {
+            TokenType::FloatLiteral(val) => assert!((val - 3.14).abs() < 0.001),
+            _ => panic!("Expected float literal"),
+        }
+    }
+
+    #[test]
+    fn test_function_definition() {
+        let mut lexer = Lexer::new("function add(x: number, y: number) -> number");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Function);
+        assert_eq!(tokens[1].token_type, TokenType::Identifier("add".to_string()));
+        assert_eq!(tokens[2].token_type, TokenType::LeftParen);
+        assert_eq!(tokens[3].token_type, TokenType::Identifier("x".to_string()));
+        assert_eq!(tokens[4].token_type, TokenType::Colon);
+        assert_eq!(tokens[5].token_type, TokenType::Number);
+    }
+
+    #[test]
+    fn test_whitespace_handling() {
+        let mut lexer = Lexer::new("  \t\n  page  \n\t  table  ");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Page);
+        assert_eq!(tokens[1].token_type, TokenType::Table);
+        assert_eq!(tokens.len(), 3); // page, table, EOF
+    }
+
+    #[test]
+    fn test_filter_keywords() {
+        let mut lexer = Lexer::new("filter single multi");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::Filter);
+        assert_eq!(tokens[1].token_type, TokenType::Single);
+        assert_eq!(tokens[2].token_type, TokenType::Multi);
+    }
+
+    #[test]
+    fn test_control_flow_keywords() {
+        let mut lexer = Lexer::new("if else forall in return");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens[0].token_type, TokenType::If);
+        assert_eq!(tokens[1].token_type, TokenType::Else);
+        assert_eq!(tokens[2].token_type, TokenType::Forall);
+        assert_eq!(tokens[3].token_type, TokenType::In);
+        assert_eq!(tokens[4].token_type, TokenType::Return);
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let mut lexer = Lexer::new("");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_only_whitespace() {
+        let mut lexer = Lexer::new("   \n\t  \n  ");
+        let tokens = lexer.tokenize().unwrap();
+        
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token_type, TokenType::Eof);
+    }
+}

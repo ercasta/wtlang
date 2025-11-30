@@ -11,4 +11,6 @@
 9. (Done) Work on scoping and symbol tables. The symbol table is needed to check for usage of variables not yet declared. Also, scoping must be implemented, as each page is a separate scope in terms of variables. As the language is strongly typed, we must also check for type consistency; this is also useful for autocomplete. We must also allow declaring variable without assigning a value, but declaring the type (we can use a colon notation for typing). The first step is expanding the compiler documentation, and likely the language tutorial. Remember that the next step will be to actually update not only the compiler but also the Language Server, and this also implies creating more useful and contextualized error messages, so take this into account when defining the strategy for managing symbols.
 10. (Done) Actually implement the new scoping rules in the compiler and other tools
 11. (Done) As the language and tools are expanding, a test suite for the tools is needed. Create a document to describe how to create a set of tests for the tools, to run after performing changes.
+12. (Done) Implement some Unit, Integration an Regression test according to the defined testing strategy
+
 

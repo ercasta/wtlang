@@ -229,3 +229,334 @@ impl Default for SymbolTable {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_define_and_lookup_in_global() {
+        let mut table = SymbolTable::new();
+        
+        let symbol = Symbol {
+            name: "global_var".to_string(),
+            symbol_type: Type::Float,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        
+        table.define("global_var".to_string(), symbol).unwrap();
+        let found = table.lookup("global_var").unwrap();
+        
+        assert_eq!(found.name, "global_var");
+        assert_eq!(found.symbol_type, Type::Float);
+        assert!(found.is_initialized);
+    }
+
+    #[test]
+    fn test_nested_scopes() {
+        let mut table = SymbolTable::new();
+        
+        // Define in global
+        let global_sym = Symbol {
+            name: "outer".to_string(),
+            symbol_type: Type::String,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("outer".to_string(), global_sym).unwrap();
+        
+        // Enter page scope
+        table.push_scope(ScopeKind::Page);
+        let page_sym = Symbol {
+            name: "inner".to_string(),
+            symbol_type: Type::Int,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("inner".to_string(), page_sym).unwrap();
+        
+        // Inner scope can see both
+        assert!(table.lookup("outer").is_some());
+        assert!(table.lookup("inner").is_some());
+        
+        // Exit scope
+        table.pop_scope();
+        
+        // Outer scope can't see inner
+        assert!(table.lookup("outer").is_some());
+        assert!(table.lookup("inner").is_none());
+    }
+
+    #[test]
+    fn test_shadowing() {
+        let mut table = SymbolTable::new();
+        
+        // Define in global
+        let outer_sym = Symbol {
+            name: "x".to_string(),
+            symbol_type: Type::Int,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("x".to_string(), outer_sym).unwrap();
+        
+        // Enter function scope
+        table.push_scope(ScopeKind::FunctionBody);
+        let inner_sym = Symbol {
+            name: "x".to_string(),
+            symbol_type: Type::String,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("x".to_string(), inner_sym).unwrap();
+        
+        // Inner shadows outer
+        let found = table.lookup("x").unwrap();
+        assert_eq!(found.symbol_type, Type::String);
+        
+        // Exit scope
+        table.pop_scope();
+        
+        // Back to outer
+        let found = table.lookup("x").unwrap();
+        assert_eq!(found.symbol_type, Type::Int);
+    }
+
+    #[test]
+    fn test_redefinition_error() {
+        let mut table = SymbolTable::new();
+        
+        let sym1 = Symbol {
+            name: "var".to_string(),
+            symbol_type: Type::Float,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("var".to_string(), sym1).unwrap();
+        
+        let sym2 = Symbol {
+            name: "var".to_string(),
+            symbol_type: Type::String,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        let result = table.define("var".to_string(), sym2);
+        
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SymbolError::Redefinition { name } => assert_eq!(name, "var"),
+            _ => panic!("Expected Redefinition error"),
+        }
+    }
+
+    #[test]
+    fn test_undefined_variable() {
+        let table = SymbolTable::new();
+        assert!(table.lookup("undefined").is_none());
+    }
+
+    #[test]
+    fn test_mark_initialized() {
+        let mut table = SymbolTable::new();
+        
+        let symbol = Symbol {
+            name: "var".to_string(),
+            symbol_type: Type::Int,
+            kind: SymbolKind::Variable,
+            is_initialized: false,
+            is_mutable: true,
+        };
+        table.define("var".to_string(), symbol).unwrap();
+        
+        // Initially not initialized
+        assert!(!table.lookup("var").unwrap().is_initialized);
+        
+        // Mark as initialized
+        table.mark_initialized("var").unwrap();
+        
+        // Now initialized
+        assert!(table.lookup("var").unwrap().is_initialized);
+    }
+
+    #[test]
+    fn test_mark_initialized_in_nested_scope() {
+        let mut table = SymbolTable::new();
+        
+        table.push_scope(ScopeKind::Page);
+        let symbol = Symbol {
+            name: "var".to_string(),
+            symbol_type: Type::Float,
+            kind: SymbolKind::Variable,
+            is_initialized: false,
+            is_mutable: true,
+        };
+        table.define("var".to_string(), symbol).unwrap();
+        
+        table.push_scope(ScopeKind::IfBranch);
+        table.mark_initialized("var").unwrap();
+        
+        // Should be marked as initialized in parent scope
+        table.pop_scope();
+        assert!(table.lookup("var").unwrap().is_initialized);
+    }
+
+    #[test]
+    fn test_function_parameters() {
+        let mut table = SymbolTable::new();
+        
+        table.push_scope(ScopeKind::FunctionBody);
+        
+        let param = Symbol {
+            name: "x".to_string(),
+            symbol_type: Type::Int,
+            kind: SymbolKind::Parameter,
+            is_initialized: true,  // Parameters are initialized by definition
+            is_mutable: true,
+        };
+        table.define("x".to_string(), param).unwrap();
+        
+        let found = table.lookup("x").unwrap();
+        assert_eq!(found.kind, SymbolKind::Parameter);
+        assert!(found.is_initialized);
+    }
+
+    #[test]
+    fn test_loop_variables() {
+        let mut table = SymbolTable::new();
+        
+        table.push_scope(ScopeKind::ForallLoop);
+        
+        let loop_var = Symbol {
+            name: "item".to_string(),
+            symbol_type: Type::String,
+            kind: SymbolKind::LoopVariable,
+            is_initialized: true,
+            is_mutable: false,  // Loop variables typically shouldn't be reassigned
+        };
+        table.define("item".to_string(), loop_var).unwrap();
+        
+        let found = table.lookup("item").unwrap();
+        assert_eq!(found.kind, SymbolKind::LoopVariable);
+    }
+
+    #[test]
+    fn test_multiple_scope_levels() {
+        let mut table = SymbolTable::new();
+        
+        // Global
+        let global_sym = Symbol {
+            name: "global".to_string(),
+            symbol_type: Type::Float,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("global".to_string(), global_sym).unwrap();
+        
+        // Page scope
+        table.push_scope(ScopeKind::Page);
+        let page_sym = Symbol {
+            name: "page_var".to_string(),
+            symbol_type: Type::String,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("page_var".to_string(), page_sym).unwrap();
+        
+        // Section scope
+        table.push_scope(ScopeKind::Section);
+        let section_sym = Symbol {
+            name: "section_var".to_string(),
+            symbol_type: Type::Bool,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("section_var".to_string(), section_sym).unwrap();
+        
+        // All three should be visible
+        assert!(table.lookup("global").is_some());
+        assert!(table.lookup("page_var").is_some());
+        assert!(table.lookup("section_var").is_some());
+        
+        // Exit section
+        table.pop_scope();
+        assert!(table.lookup("global").is_some());
+        assert!(table.lookup("page_var").is_some());
+        assert!(table.lookup("section_var").is_none());
+        
+        // Exit page
+        table.pop_scope();
+        assert!(table.lookup("global").is_some());
+        assert!(table.lookup("page_var").is_none());
+    }
+
+    #[test]
+    fn test_symbol_kinds() {
+        let mut table = SymbolTable::new();
+        
+        // Table definition
+        let table_sym = Symbol {
+            name: "User".to_string(),
+            symbol_type: Type::Table("User".to_string()),
+            kind: SymbolKind::Table,
+            is_initialized: true,
+            is_mutable: false,
+        };
+        table.define("User".to_string(), table_sym).unwrap();
+        
+        // Function definition (functions don't have a specific Type variant in this AST)
+        let func_sym = Symbol {
+            name: "add".to_string(),
+            symbol_type: Type::String,  // Placeholder since there's no Type::Function
+            kind: SymbolKind::Function,
+            is_initialized: true,
+            is_mutable: false,
+        };
+        table.define("add".to_string(), func_sym).unwrap();
+        
+        assert_eq!(table.lookup("User").unwrap().kind, SymbolKind::Table);
+        assert_eq!(table.lookup("add").unwrap().kind, SymbolKind::Function);
+    }
+
+    #[test]
+    fn test_scope_isolation_between_pages() {
+        let mut table = SymbolTable::new();
+        
+        // Page 1
+        table.push_scope(ScopeKind::Page);
+        let sym1 = Symbol {
+            name: "page1_var".to_string(),
+            symbol_type: Type::Int,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("page1_var".to_string(), sym1).unwrap();
+        table.pop_scope();
+        
+        // Page 2
+        table.push_scope(ScopeKind::Page);
+        // Should not see page1_var
+        assert!(table.lookup("page1_var").is_none());
+        
+        let sym2 = Symbol {
+            name: "page2_var".to_string(),
+            symbol_type: Type::String,
+            kind: SymbolKind::Variable,
+            is_initialized: true,
+            is_mutable: true,
+        };
+        table.define("page2_var".to_string(), sym2).unwrap();
+        assert!(table.lookup("page2_var").is_some());
+    }
+}

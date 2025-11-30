@@ -1,0 +1,3 @@
+page Test {
+    let x: int = "not a number"
+}

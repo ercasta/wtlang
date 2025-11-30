@@ -1,0 +1,3 @@
+page SimplePage {
+    text "Hello, World!"
+}

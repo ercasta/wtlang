@@ -1,0 +1,4 @@
+page Test {
+    let result: int
+    display result
+}

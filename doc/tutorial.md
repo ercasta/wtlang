@@ -5,18 +5,28 @@ Welcome to WTLang! This tutorial will teach you how to create interactive web ap
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Part 1: Data Presentation](#part-1-data-presentation)
+2. [Understanding Variables and Scoping](#understanding-variables-and-scoping)
+   - [Variable Declaration](#variable-declaration)
+   - [Type Annotations](#type-annotations)
+   - [Page-Level Scoping](#page-level-scoping)
+   - [Nested Scopes](#nested-scopes)
+   - [Variable Initialization Rules](#variable-initialization-rules)
+   - [Immutability](#immutability)
+   - [Function Scope](#function-scope)
+   - [Global Declarations](#global-declarations)
+   - [Best Practices](#best-practices)
+3. [Part 1: Data Presentation](#part-1-data-presentation)
    - [Creating Your First Page](#creating-your-first-page)
    - [Working with Tables](#working-with-tables)
    - [Multiple Pages](#multiple-pages)
    - [Adding Interactivity](#adding-interactivity)
-3. [Part 2: Data Manipulation](#part-2-data-manipulation)
+4. [Part 2: Data Manipulation](#part-2-data-manipulation)
    - [Functions and Transformations](#functions-and-transformations)
    - [Function Chaining](#function-chaining)
    - [User-Defined Functions](#user-defined-functions)
    - [External Functions](#external-functions)
-4. [Advanced Topics](#advanced-topics)
-5. [Complete Example](#complete-example)
+5. [Advanced Topics](#advanced-topics)
+6. [Complete Example](#complete-example)
 
 ---
 
@@ -45,6 +55,338 @@ cd my-first-app
 #   │   └── main.wt
 #   └── wtlang.toml
 ```
+
+---
+
+## Understanding Variables and Scoping
+
+Before diving into data presentation, it's important to understand how variables work in WTLang.
+
+### Variable Declaration
+
+Variables are declared using the `let` keyword:
+
+```wtlang
+page Example {
+  title "Variables Example"
+  
+  // Type is inferred from the value
+  let name = "Alice"          // string
+  let age = 25                // int
+  let price = 99.99           // float
+  let active = true           // bool
+}
+```
+
+### Type Annotations
+
+You can optionally specify the type explicitly using a colon (`:`):
+
+```wtlang
+page TypedExample {
+  title "Type Annotations"
+  
+  // Explicit type annotation
+  let count: int = 10
+  let name: string = "Bob"
+  let total: float = 123.45
+  
+  // Type annotation without immediate initialization
+  let result: float
+  
+  if some_condition {
+    result = 100.0
+  } else {
+    result = 50.0
+  }
+  
+  text "Result: {result}"
+}
+```
+
+**When to use type annotations:**
+- When declaring a variable without an initial value
+- To make code more self-documenting
+- When the type isn't obvious from the initializer
+- For better IDE autocomplete and error checking
+
+### Page-Level Scoping
+
+**Each page has its own independent variable scope:**
+
+```wtlang
+page Dashboard {
+  let users = load_csv("users.csv", User)  // Only visible in Dashboard
+  show(users)
+}
+
+page Reports {
+  // ERROR: 'users' is not defined here (different page)
+  // show(users)
+  
+  // Must load data again for this page
+  let reports = load_csv("reports.csv", Report)
+  show(reports)
+}
+```
+
+**Why page-level scoping?**
+- Each page is compiled to a separate Python file
+- Pages are independent and don't share state
+- Prevents coupling between different parts of your application
+- Makes code easier to understand and maintain
+
+### Nested Scopes
+
+Sections, buttons, and control flow create child scopes that can access parent variables:
+
+```wtlang
+page Analysis {
+  let data = load_csv("data.csv", Data)     // Page scope
+  
+  section "Summary" {
+    let total = sum(data, "amount")          // Section scope
+    text "Total: {total}"                    // Can use 'total' here
+  }
+  
+  section "Details" {
+    // ERROR: 'total' is not in scope (defined in other section)
+    // text "Total: {total}"
+    
+    // But 'data' is available (parent page scope)
+    show(data)                               // OK
+  }
+  
+  button "Export" {
+    let filename = "export.xlsx"             // Button scope
+    export_excel(data, filename)             // Can use 'data' from page scope
+  }
+  
+  // 'filename' is NOT visible here (button scope ended)
+}
+```
+
+**Scope rules:**
+- Child scopes can access variables from parent scopes
+- Variables in child scopes are NOT visible to parents or siblings
+- Each `{ }` block creates a new scope
+
+### Conditional Scopes
+
+```wtlang
+page Conditional {
+  let total = 1000
+  let threshold = 500
+  
+  if total > threshold {
+    let message = "High value!"              // Only in if-branch
+    text message
+  } else {
+    let message = "Low value"                // Separate else-branch scope
+    text message
+  }
+  
+  // ERROR: 'message' not in scope here
+  // text message
+}
+```
+
+### Loop Scopes
+
+```wtlang
+page Loop {
+  let categories = ["Electronics", "Books", "Clothing"]
+  
+  forall category in categories {
+    // 'category' is available in loop body
+    let filtered = products -> filter(_, row => row.category == category)
+    
+    section category {
+      show(filtered)
+    }
+  }
+  
+  // ERROR: 'category' and 'filtered' not in scope here
+}
+```
+
+### Variable Initialization Rules
+
+Variables must be initialized before use:
+
+```wtlang
+page Initialization {
+  let result: float       // Declared but not initialized
+  
+  // ERROR: cannot use 'result' yet
+  // text "Result: {result}"
+  
+  result = 100.0          // Now initialized
+  text "Result: {result}" // OK
+}
+```
+
+For conditional initialization, all branches must assign a value:
+
+```wtlang
+page ConditionalInit {
+  let value: float
+  
+  if condition {
+    value = 100.0
+  } else {
+    value = 50.0
+  }
+  // OK: 'value' assigned in both branches
+  
+  text "Value: {value}"
+}
+```
+
+```wtlang
+page IncompleteInit {
+  let value: float
+  
+  if condition {
+    value = 100.0
+  }
+  // ERROR: 'value' might not be assigned (no else branch)
+  
+  text "Value: {value}"
+}
+```
+
+### Immutability
+
+Variables in WTLang follow single-assignment semantics:
+
+```wtlang
+page Immutable {
+  let count = 10
+  // count = 20           // ERROR: cannot reassign
+  
+  // Instead, create a new variable
+  let new_count = count + 10
+  
+  // For tables, transformations create new tables
+  let users = load_csv("users.csv", User)
+  let filtered = users -> filter(_, row => row.age > 18)  // New table
+}
+```
+
+**Note:** While WTLang is immutable, the conditional initialization pattern allows a single assignment after declaration, making the code more readable while maintaining functional purity.
+
+### Function Scope
+
+Function bodies have their own independent scope, separate from pages:
+
+```wtlang
+function calculate_total(items: table<Item>) -> float {
+  // Function parameters are only visible in the function body
+  // 'items' is a parameter, scoped to this function
+  
+  let sum: float = 0.0  // Local variable, only visible in function
+  
+  forall item in items {
+    sum = sum + item.price * item.quantity
+  }
+  
+  return sum
+}
+
+page Invoice {
+  let cart_items = load_csv("cart.csv", Item)
+  let total = calculate_total(cart_items)  // Call the function
+  
+  text "Total: ${total}"
+  
+  // ERROR: 'sum' not in scope (it's local to the function)
+  // text "Sum: {sum}"
+  
+  // ERROR: 'items' not in scope (it's a function parameter)
+  // show(items)
+}
+```
+
+**Key points about function scope:**
+- Function parameters are only accessible within that function's body
+- Variables declared inside a function are local to that function
+- Functions can call other global functions and reference global tables
+- Functions cannot access variables from pages or other functions
+- Each function call creates a new scope instance
+
+### Global Declarations
+
+Table definitions, function signatures, and external function declarations are global and visible everywhere:
+
+```wtlang
+// Global table definition
+table User {
+  id: int [unique, non_null]
+  name: string
+  age: int
+  email: string
+}
+
+// Global function - signature is global, body has its own scope
+function is_adult(user: User) -> bool {
+  let threshold = 18  // Local to function, not visible outside
+  return user.age >= threshold
+}
+
+// Both pages can use the table and call the function
+page Dashboard {
+  let users = load_csv("users.csv", User)  // Uses global table
+  let adults = users -> filter(_, is_adult)  // Calls global function
+  show(adults)
+}
+
+page Reports {
+  let users = load_csv("users.csv", User)  // Same global table
+  let adult_users = users -> filter(_, is_adult)  // Same global function
+  
+  // 'threshold' from is_adult is NOT visible here (function-local)
+  show(adult_users)
+}
+```
+
+**What's global:**
+- Table type definitions (can be used anywhere)
+- Function names and signatures (can be called anywhere)
+- External function declarations
+
+**What's NOT global:**
+- Function parameters (scoped to function body)
+- Local variables in functions (scoped to function body)
+- Page variables (scoped to that specific page)
+- Variables in sections, buttons, etc. (scoped to their blocks)
+
+### Best Practices
+
+1. **Declare variables close to where they're used**
+   ```wtlang
+   section "Summary" {
+     let total = sum(data, "amount")  // Declared in section where it's needed
+     text "Total: {total}"
+   }
+   ```
+
+2. **Use descriptive names**
+   ```wtlang
+   let active_users = users -> filter(_, row => row.active)  // Clear
+   let x = users -> filter(_, row => row.active)             // Unclear
+   ```
+
+3. **Add type annotations for clarity**
+   ```wtlang
+   let total_revenue: currency  // Makes intent clear
+   let user_count: int
+   ```
+
+4. **Keep page scopes independent**
+   - Don't rely on shared global variables between pages
+   - Each page should load its own data
+   - Use functions to share logic, not variables
 
 ---
 

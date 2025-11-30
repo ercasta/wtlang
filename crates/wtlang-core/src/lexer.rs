@@ -1,4 +1,6 @@
 // Token types for the WTLang lexer
+use crate::errors::{ErrorCode, DiagnosticBag, Location};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Keywords
@@ -99,6 +101,8 @@ pub struct Lexer {
     position: usize,
     line: usize,
     column: usize,
+    diagnostics: DiagnosticBag,
+    source: String,  // Keep source for context in error messages
 }
 
 impl Lexer {
@@ -108,10 +112,12 @@ impl Lexer {
             position: 0,
             line: 1,
             column: 1,
+            diagnostics: DiagnosticBag::new(),
+            source: input.to_string(),
         }
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, String> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, DiagnosticBag> {
         let mut tokens = Vec::new();
         
         while !self.is_at_end() {
@@ -120,15 +126,30 @@ impl Lexer {
                 break;
             }
             
-            let token = self.next_token()?;
-            tokens.push(token);
+            match self.next_token() {
+                Ok(token) => tokens.push(token),
+                Err(_) => {
+                    // Error already added to diagnostics, continue to find more errors
+                    self.advance(); // Skip the problematic character
+                }
+            }
         }
         
         tokens.push(Token::new(TokenType::Eof, self.line, self.column));
-        Ok(tokens)
+        
+        if self.diagnostics.has_errors() {
+            Err(self.diagnostics.clone())
+        } else {
+            Ok(tokens)
+        }
+    }
+    
+    fn add_error(&mut self, code: ErrorCode, message: String, line: usize, column: usize) {
+        let location = Location::new(line, column);
+        self.diagnostics.add_error(code, message, location);
     }
 
-    fn next_token(&mut self) -> Result<Token, String> {
+    fn next_token(&mut self) -> Result<Token, ()> {
         let start_line = self.line;
         let start_column = self.column;
         
@@ -233,7 +254,13 @@ impl Lexer {
                     self.advance();
                     TokenType::And
                 } else {
-                    return Err(format!("Unexpected character '&' at line {}, column {}", start_line, start_column));
+                    self.add_error(
+                        ErrorCode::E1003,
+                        "Unexpected character '&', did you mean '&&'?".to_string(),
+                        start_line,
+                        start_column
+                    );
+                    return Err(());
                 }
             },
             
@@ -243,19 +270,31 @@ impl Lexer {
                     self.advance();
                     TokenType::Or
                 } else {
-                    return Err(format!("Unexpected character '|' at line {}, column {}", start_line, start_column));
+                    self.add_error(
+                        ErrorCode::E1003,
+                        "Unexpected character '|', did you mean '||'?".to_string(),
+                        start_line,
+                        start_column
+                    );
+                    return Err(());
                 }
             },
             
             _ => {
-                return Err(format!("Unexpected character '{}' at line {}, column {}", ch, start_line, start_column));
+                self.add_error(
+                    ErrorCode::E1003,
+                    format!("Invalid character '{}'", ch),
+                    start_line,
+                    start_column
+                );
+                return Err(());
             }
         };
         
         Ok(Token::new(token_type, start_line, start_column))
     }
 
-    fn read_string(&mut self) -> Result<Token, String> {
+    fn read_string(&mut self) -> Result<Token, ()> {
         let start_line = self.line;
         let start_column = self.column;
         
@@ -284,14 +323,20 @@ impl Lexer {
         }
         
         if self.is_at_end() {
-            return Err(format!("Unterminated string at line {}, column {}", start_line, start_column));
+            self.add_error(
+                ErrorCode::E1001,
+                "Unterminated string literal".to_string(),
+                start_line,
+                start_column
+            );
+            return Err(());
         }
         
         self.advance(); // Skip closing quote
         Ok(Token::new(TokenType::StringLiteral(value), start_line, start_column))
     }
 
-    fn read_number(&mut self) -> Result<Token, String> {
+    fn read_number(&mut self) -> Result<Token, ()> {
         let start_line = self.line;
         let start_column = self.column;
         
@@ -310,17 +355,35 @@ impl Lexer {
         }
         
         if is_float {
-            let num = value.parse::<f64>()
-                .map_err(|_| format!("Invalid float '{}' at line {}, column {}", value, start_line, start_column))?;
-            Ok(Token::new(TokenType::FloatLiteral(num), start_line, start_column))
+            match value.parse::<f64>() {
+                Ok(num) => Ok(Token::new(TokenType::FloatLiteral(num), start_line, start_column)),
+                Err(_) => {
+                    self.add_error(
+                        ErrorCode::E1002,
+                        format!("Invalid float '{}'", value),
+                        start_line,
+                        start_column
+                    );
+                    Err(())
+                }
+            }
         } else {
-            let num = value.parse::<i64>()
-                .map_err(|_| format!("Invalid integer '{}' at line {}, column {}", value, start_line, start_column))?;
-            Ok(Token::new(TokenType::IntLiteral(num), start_line, start_column))
+            match value.parse::<i64>() {
+                Ok(num) => Ok(Token::new(TokenType::IntLiteral(num), start_line, start_column)),
+                Err(_) => {
+                    self.add_error(
+                        ErrorCode::E1002,
+                        format!("Invalid integer '{}'", value),
+                        start_line,
+                        start_column
+                    );
+                    Err(())
+                }
+            }
         }
     }
 
-    fn read_identifier(&mut self) -> Result<Token, String> {
+    fn read_identifier(&mut self) -> Result<Token, ()> {
         let start_line = self.line;
         let start_column = self.column;
         
@@ -567,7 +630,9 @@ mod tests {
         let result = lexer.tokenize();
         
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Unterminated string"));
+        let diag = result.unwrap_err();
+        assert_eq!(diag.diagnostics().len(), 1);
+        assert!(diag.format_all().contains("Unterminated string"));
     }
 
     #[test]

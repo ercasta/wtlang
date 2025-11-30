@@ -1,39 +1,81 @@
 // Parser for WTLang
 use crate::ast::*;
 use crate::lexer::{Token, TokenType};
+use crate::errors::{ErrorCode, DiagnosticBag, Location};
 
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
+    diagnostics: DiagnosticBag,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, current: 0 }
+        Parser { 
+            tokens, 
+            current: 0,
+            diagnostics: DiagnosticBag::new(),
+        }
     }
 
-    pub fn parse(&mut self) -> Result<Program, String> {
+    pub fn parse(&mut self) -> Result<Program, DiagnosticBag> {
         let mut items = Vec::new();
         
         while !self.is_at_end() {
-            items.push(self.parse_program_item()?);
+            match self.parse_program_item() {
+                Ok(item) => items.push(item),
+                Err(_) => {
+                    // Error already added to diagnostics
+                    // Try to recover by skipping to next top-level item
+                    self.synchronize();
+                }
+            }
         }
         
-        Ok(Program { items })
+        if self.diagnostics.has_errors() {
+            Err(self.diagnostics.clone())
+        } else {
+            Ok(Program { items })
+        }
+    }
+    
+    fn synchronize(&mut self) {
+        // Skip tokens until we find a likely start of a new item
+        while !self.is_at_end() {
+            if matches!(
+                self.peek().token_type,
+                TokenType::Page | TokenType::Table | TokenType::Function | TokenType::External | TokenType::Test
+            ) {
+                return;
+            }
+            self.advance();
+        }
+    }
+    
+    fn add_error(&mut self, code: ErrorCode, message: String) {
+        let token = self.peek();
+        let location = Location::new(token.line, token.column);
+        self.diagnostics.add_error(code, message, location);
     }
 
-    fn parse_program_item(&mut self) -> Result<ProgramItem, String> {
+    fn parse_program_item(&mut self) -> Result<ProgramItem, ()> {
         match &self.peek().token_type {
             TokenType::Table => Ok(ProgramItem::TableDef(self.parse_table_def()?)),
             TokenType::Page => Ok(ProgramItem::Page(self.parse_page()?)),
             TokenType::Function => Ok(ProgramItem::FunctionDef(self.parse_function_def()?)),
             TokenType::External => Ok(ProgramItem::ExternalFunction(self.parse_external_function()?)),
             TokenType::Test => Ok(ProgramItem::Test(self.parse_test()?)),
-            _ => Err(format!("Expected table, page, function, external, or test, got {:?}", self.peek().token_type)),
+            _ => {
+                self.add_error(
+                    ErrorCode::E2001,
+                    format!("Expected table, page, function, external, or test, got {:?}", self.peek().token_type)
+                );
+                Err(())
+            }
         }
     }
 
-    fn parse_table_def(&mut self) -> Result<TableDef, String> {
+    fn parse_table_def(&mut self) -> Result<TableDef, ()> {
         self.expect(TokenType::Table)?;
         let name = self.expect_identifier()?;
         self.expect(TokenType::LeftBrace)?;
@@ -47,7 +89,7 @@ impl Parser {
         Ok(TableDef { name, fields })
     }
 
-    fn parse_field(&mut self) -> Result<Field, String> {
+    fn parse_field(&mut self) -> Result<Field, ()> {
         let name = self.expect_identifier()?;
         self.expect(TokenType::Colon)?;
         let field_type = self.parse_type()?;
@@ -62,8 +104,8 @@ impl Parser {
         Ok(Field { name, field_type, constraints })
     }
 
-    fn parse_type(&mut self) -> Result<Type, String> {
-        let token = self.advance();
+    fn parse_type(&mut self) -> Result<Type, ()> {
+        let token = self.advance().clone();
         match &token.token_type {
             TokenType::Int => Ok(Type::Int),
             TokenType::Float => Ok(Type::Float),
@@ -74,11 +116,17 @@ impl Parser {
             TokenType::Currency => Ok(Type::Currency),
             TokenType::Bool => Ok(Type::Bool),
             TokenType::Filter => Ok(Type::Filter),  // filter type
-            _ => Err(format!("Expected type, got {:?}", token.token_type)),
+            _ => {
+                self.add_error(
+                    ErrorCode::E2003,
+                    format!("Expected type, got {:?}", token.token_type)
+                );
+                Err(())
+            }
         }
     }
 
-    fn parse_constraints(&mut self) -> Result<Vec<Constraint>, String> {
+    fn parse_constraints(&mut self) -> Result<Vec<Constraint>, ()> {
         let mut constraints = Vec::new();
         
         loop {
@@ -86,7 +134,13 @@ impl Parser {
             let constraint = match ident.as_str() {
                 "unique" => Constraint::Unique,
                 "non_null" => Constraint::NonNull,
-                _ => return Err(format!("Unknown constraint: {}", ident)),
+                _ => {
+                    self.add_error(
+                        ErrorCode::E2012,
+                        format!("Unknown constraint: {}", ident)
+                    );
+                    return Err(());
+                }
             };
             constraints.push(constraint);
             
@@ -99,7 +153,7 @@ impl Parser {
         Ok(constraints)
     }
 
-    fn parse_page(&mut self) -> Result<Page, String> {
+    fn parse_page(&mut self) -> Result<Page, ()> {
         self.expect(TokenType::Page)?;
         let name = self.expect_identifier()?;
         self.expect(TokenType::LeftBrace)?;
@@ -113,7 +167,7 @@ impl Parser {
         Ok(Page { name, statements })
     }
 
-    fn parse_statement(&mut self) -> Result<Statement, String> {
+    fn parse_statement(&mut self) -> Result<Statement, ()> {
         match &self.peek().token_type {
             TokenType::Title => {
                 self.advance();
@@ -174,10 +228,11 @@ impl Parser {
                 
                 // Must have either type annotation or value (or both)
                 if type_annotation.is_none() && value.is_none() {
-                    return Err(format!(
-                        "Variable '{}' must have either a type annotation or an initializer",
-                        name
-                    ));
+                    self.add_error(
+                        ErrorCode::E2004,
+                        format!("Variable '{}' must have either a type annotation or an initializer", name)
+                    );
+                    return Err(());
                 }
                 
                 Ok(Statement::Let { name, type_annotation, value })
@@ -230,14 +285,24 @@ impl Parser {
                 if let Expr::FunctionCall(call) = name_or_expr {
                     Ok(Statement::FunctionCall(call))
                 } else {
-                    Err(format!("Expected function call or assignment"))
+                    self.add_error(
+                        ErrorCode::E2001,
+                        "Expected function call or assignment".to_string()
+                    );
+                    Err(())
                 }
             },
-            _ => Err(format!("Unexpected token in statement: {:?}", self.peek().token_type)),
+            _ => {
+                self.add_error(
+                    ErrorCode::E2001,
+                    format!("Unexpected token in statement: {:?}", self.peek().token_type)
+                );
+                Err(())
+            }
         }
     }
 
-    fn parse_function_def(&mut self) -> Result<FunctionDef, String> {
+    fn parse_function_def(&mut self) -> Result<FunctionDef, ()> {
         self.expect(TokenType::Function)?;
         let name = self.expect_identifier()?;
         self.expect(TokenType::LeftParen)?;
@@ -256,7 +321,7 @@ impl Parser {
         Ok(FunctionDef { name, params, return_type, body })
     }
 
-    fn parse_external_function(&mut self) -> Result<ExternalFunction, String> {
+    fn parse_external_function(&mut self) -> Result<ExternalFunction, ()> {
         self.expect(TokenType::External)?;
         self.expect(TokenType::Function)?;
         let name = self.expect_identifier()?;
@@ -271,7 +336,7 @@ impl Parser {
         Ok(ExternalFunction { name, params, return_type, module })
     }
 
-    fn parse_parameters(&mut self) -> Result<Vec<Parameter>, String> {
+    fn parse_parameters(&mut self) -> Result<Vec<Parameter>, ()> {
         let mut params = Vec::new();
         
         if self.check(&TokenType::RightParen) {
@@ -293,7 +358,7 @@ impl Parser {
         Ok(params)
     }
 
-    fn parse_test(&mut self) -> Result<Test, String> {
+    fn parse_test(&mut self) -> Result<Test, ()> {
         self.expect(TokenType::Test)?;
         let name = self.expect_string()?;
         self.expect(TokenType::LeftBrace)?;
@@ -307,11 +372,11 @@ impl Parser {
         Ok(Test { name, body })
     }
 
-    fn parse_expression(&mut self) -> Result<Expr, String> {
+    fn parse_expression(&mut self) -> Result<Expr, ()> {
         self.parse_chain()
     }
 
-    fn parse_chain(&mut self) -> Result<Expr, String> {
+    fn parse_chain(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_or()?;
         
         while self.check(&TokenType::Arrow) {
@@ -326,7 +391,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_or(&mut self) -> Result<Expr, String> {
+    fn parse_or(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_and()?;
         
         while self.check(&TokenType::Or) {
@@ -342,7 +407,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_and(&mut self) -> Result<Expr, String> {
+    fn parse_and(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_equality()?;
         
         while self.check(&TokenType::And) {
@@ -358,7 +423,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_equality(&mut self) -> Result<Expr, String> {
+    fn parse_equality(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_comparison()?;
         
         while self.check(&TokenType::Equals) || self.check(&TokenType::NotEquals) {
@@ -379,7 +444,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_comparison(&mut self) -> Result<Expr, String> {
+    fn parse_comparison(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_addition()?;
         
         while matches!(self.peek().token_type, 
@@ -405,7 +470,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_addition(&mut self) -> Result<Expr, String> {
+    fn parse_addition(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_multiplication()?;
         
         while self.check(&TokenType::Plus) || self.check(&TokenType::Minus) {
@@ -426,7 +491,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_multiplication(&mut self) -> Result<Expr, String> {
+    fn parse_multiplication(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_unary()?;
         
         while self.check(&TokenType::Star) || self.check(&TokenType::Slash) || self.check(&TokenType::Percent) {
@@ -448,7 +513,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_unary(&mut self) -> Result<Expr, String> {
+    fn parse_unary(&mut self) -> Result<Expr, ()> {
         if self.check(&TokenType::Not) || self.check(&TokenType::Minus) {
             let op = if self.check(&TokenType::Not) {
                 UnaryOp::Not
@@ -466,7 +531,7 @@ impl Parser {
         self.parse_postfix()
     }
 
-    fn parse_postfix(&mut self) -> Result<Expr, String> {
+    fn parse_postfix(&mut self) -> Result<Expr, ()> {
         let mut expr = self.parse_primary()?;
         
         loop {
@@ -493,7 +558,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_primary(&mut self) -> Result<Expr, String> {
+    fn parse_primary(&mut self) -> Result<Expr, ()> {
         let token = self.peek().clone();
         
         match &token.token_type {
@@ -567,21 +632,33 @@ impl Parser {
                 let column = self.expect_string()?;
                 self.expect(TokenType::Comma)?;
                 
-                let mode_token = self.advance();
+                let mode_token = self.advance().clone();
                 let mode = match &mode_token.token_type {
                     TokenType::Single => FilterMode::Single,
                     TokenType::Multi => FilterMode::Multi,
-                    _ => return Err(format!("Expected 'single' or 'multi', got {:?}", mode_token.token_type)),
+                    _ => {
+                        self.add_error(
+                            ErrorCode::E2011,
+                            format!("Expected 'single' or 'multi', got {:?}", mode_token.token_type)
+                        );
+                        return Err(());
+                    }
                 };
                 
                 self.expect(TokenType::RightParen)?;
                 Ok(Expr::FilterLiteral(FilterDef { column, mode }))
             },
-            _ => Err(format!("Unexpected token in expression: {:?}", token.token_type)),
+            _ => {
+                self.add_error(
+                    ErrorCode::E2001,
+                    format!("Unexpected token in expression: {:?}", token.token_type)
+                );
+                Err(())
+            }
         }
     }
 
-    fn parse_arguments(&mut self) -> Result<Vec<Expr>, String> {
+    fn parse_arguments(&mut self) -> Result<Vec<Expr>, ()> {
         let mut args = Vec::new();
         
         if self.check(&TokenType::RightParen) {
@@ -623,34 +700,50 @@ impl Parser {
         std::mem::discriminant(&self.peek().token_type) == std::mem::discriminant(token_type)
     }
 
-    fn expect(&mut self, token_type: TokenType) -> Result<(), String> {
+    fn expect(&mut self, token_type: TokenType) -> Result<(), ()> {
         if self.check(&token_type) {
             self.advance();
             Ok(())
         } else {
-            Err(format!("Expected {:?}, got {:?}", token_type, self.peek().token_type))
+            self.add_error(
+                ErrorCode::E2011,
+                format!("Expected {:?}, got {:?}", token_type, self.peek().token_type)
+            );
+            Err(())
         }
     }
 
-    fn expect_identifier(&mut self) -> Result<String, String> {
+    fn expect_identifier(&mut self) -> Result<String, ()> {
         match &self.peek().token_type {
             TokenType::Identifier(name) => {
                 let name = name.clone();
                 self.advance();
                 Ok(name)
             },
-            _ => Err(format!("Expected identifier, got {:?}", self.peek().token_type)),
+            _ => {
+                self.add_error(
+                    ErrorCode::E2002,
+                    format!("Expected identifier, got {:?}", self.peek().token_type)
+                );
+                Err(())
+            }
         }
     }
 
-    fn expect_string(&mut self) -> Result<String, String> {
+    fn expect_string(&mut self) -> Result<String, ()> {
         match &self.peek().token_type {
             TokenType::StringLiteral(s) => {
                 let s = s.clone();
                 self.advance();
                 Ok(s)
             },
-            _ => Err(format!("Expected string literal, got {:?}", self.peek().token_type)),
+            _ => {
+                self.add_error(
+                    ErrorCode::E2011,
+                    format!("Expected string literal, got {:?}", self.peek().token_type)
+                );
+                Err(())
+            }
         }
     }
 }
@@ -662,9 +755,9 @@ mod tests {
 
     fn parse_source(source: &str) -> Result<Program, String> {
         let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize().map_err(|e| format!("Lexer error: {}", e))?;
+        let tokens = lexer.tokenize().map_err(|diag| diag.format_all())?;
         let mut parser = Parser::new(tokens);
-        parser.parse()
+        parser.parse().map_err(|diag| diag.format_all())
     }
 
     #[test]

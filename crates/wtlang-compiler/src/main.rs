@@ -58,12 +58,18 @@ fn build_command(input: PathBuf, output: PathBuf) -> Result<()> {
     // Lexical analysis
     let mut lexer = Lexer::new(&source);
     let tokens = lexer.tokenize()
-        .map_err(|e| anyhow::anyhow!("Lexer error: {}", e))?;
+        .map_err(|diag| {
+            eprintln!("\nLexical errors found:\n{}", diag.format_all());
+            anyhow::anyhow!("Lexical analysis failed")
+        })?;
     
     // Parsing
     let mut parser = Parser::new(tokens);
     let program = parser.parse()
-        .map_err(|e| anyhow::anyhow!("Parser error: {}", e))?;
+        .map_err(|diag| {
+            eprintln!("\nSyntax errors found:\n{}", diag.format_all());
+            anyhow::anyhow!("Parsing failed")
+        })?;
     
     println!("Successfully parsed {} items", program.items.len());
     
@@ -122,14 +128,20 @@ fn check_command(input: PathBuf) -> Result<()> {
     // Lexical analysis
     let mut lexer = Lexer::new(&source);
     let tokens = lexer.tokenize()
-        .map_err(|e| anyhow::anyhow!("Lexer error: {}", e))?;
+        .map_err(|diag| {
+            eprintln!("\nLexical errors found:\n{}", diag.format_all());
+            anyhow::anyhow!("Lexical analysis failed")
+        })?;
     
     println!("✓ Lexical analysis passed ({} tokens)", tokens.len());
     
     // Parsing
     let mut parser = Parser::new(tokens);
     let program = parser.parse()
-        .map_err(|e| anyhow::anyhow!("Parser error: {}", e))?;
+        .map_err(|diag| {
+            eprintln!("\nSyntax errors found:\n{}", diag.format_all());
+            anyhow::anyhow!("Parsing failed")
+        })?;
     
     println!("✓ Parsing passed ({} items)", program.items.len());
     

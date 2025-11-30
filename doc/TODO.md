@@ -12,5 +12,7 @@
 10. (Done) Actually implement the new scoping rules in the compiler and other tools
 11. (Done) As the language and tools are expanding, a test suite for the tools is needed. Create a document to describe how to create a set of tests for the tools, to run after performing changes.
 12. (Done) Implement some Unit, Integration an Regression test according to the defined testing strategy
+13. (Done) Implement an error system for the compiler, so each error has a specific error code: for example brackets not closed, wrong types in assignment, etc. Consider this error will also have to be available to the LSP; we'll implement this part later.
+
 
 

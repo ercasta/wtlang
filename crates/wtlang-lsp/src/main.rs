@@ -212,6 +212,9 @@ impl LanguageServer for WTLangServer {
 
 #[tokio::main]
 async fn main() {
+    // Set up basic error handling
+    env_logger::init();
+    
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 

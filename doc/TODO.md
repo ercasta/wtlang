@@ -13,6 +13,11 @@
 11. (Done) As the language and tools are expanding, a test suite for the tools is needed. Create a document to describe how to create a set of tests for the tools, to run after performing changes.
 12. (Done) Implement some Unit, Integration an Regression test according to the defined testing strategy
 13. (Done) Implement an error system for the compiler, so each error has a specific error code: for example brackets not closed, wrong types in assignment, etc. Consider this error will also have to be available to the LSP; we'll implement this part later. **Update**: Error system fully integrated into lexer, parser, and compiler. All 40+ error codes working with proper formatting. LSP updated to use new error system.
+14. (Done) Complete the implementation of the LSP adding hover and autocomplete, also taking into account the new error system implemented in step 13. **Update**: LSP now provides:
+    - **Hover**: Shows type information and documentation for variables, functions, tables, built-in functions, and keywords
+    - **Autocomplete**: Context-aware suggestions for keywords, built-in functions, user-defined symbols (tables, functions, variables), and table field names
+    - **Diagnostics**: Integrated with the error system to show error codes, proper ranges, and formatted error messages from lexer, parser, and semantic analyzer
+    - **Symbol Table Integration**: Uses semantic analysis to provide accurate type information and scope-aware completions
 
 
 

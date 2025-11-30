@@ -349,3 +349,77 @@ The workspace structure enables code reuse across tools and sets the stage for a
 ---
 
 **Step 6 Complete**: Language Server Protocol implementation with VSCode extension and comprehensive documentation.
+
+## Step 14 Enhancements (Error System Integration and Advanced Features)
+
+### Overview
+
+Step 14 significantly enhanced the LSP with hover support, intelligent autocomplete, and full integration with the error system developed in step 13.
+
+### New Features
+
+#### 1. Hover Provider
+- **Symbol Information**: Shows type and kind for variables, parameters, tables, functions
+- **Built-in Functions**: Displays function signatures and documentation
+- **Keywords**: Provides documentation for language keywords
+- **Type Information**: Shows accurate type information from semantic analysis
+
+#### 2. Intelligent Autocomplete
+- **Context-Aware**: Suggestions based on current context
+- **Built-in Functions**: All 15+ standard library functions with signatures
+- **Keywords**: All language keywords with documentation
+- **User Symbols**: Tables, functions, variables from current file
+- **Field Completion**: Table fields when using dot notation
+- **Snippet Support**: Function completions include parameter placeholders
+
+#### 3. Enhanced Diagnostics
+- **Error Codes**: All diagnostics include error codes (E1xxx, E2xxx, E3xxx)
+- **Proper Ranges**: Accurate error location highlighting
+- **Multi-Phase**: Errors from lexer, parser, and semantic analyzer
+- **Severity Levels**: Error, Warning, Info, Hint
+
+#### 4. Semantic Analysis Integration
+- **Symbol Tables**: Full scope-aware symbol resolution
+- **Type Checking**: Accurate type information for all symbols
+- **Scope Awareness**: Respects page, section, and nested scopes
+
+### Implementation Details
+
+Key enhancements to `crates/wtlang-lsp/src/main.rs`:
+- Added `parse_and_analyze()` method for full semantic analysis
+- Implemented `get_builtin_functions()` with 15 built-in functions
+- Implemented `get_keywords()` with all language keywords
+- Enhanced hover provider with symbol table lookup
+- Enhanced completion provider with context detection
+- Integrated error system with proper error code mapping
+
+### Built-in Functions with Hover/Autocomplete Support
+
+1. `load_csv(table_type, filename: string) -> table`
+2. `save_csv(table, filename: string)`
+3. `show(table, filters?: filter[]) -> table`
+4. `show_editable(table, filters?: filter[]) -> table`
+5. `where(table, predicate: row -> bool) -> table`
+6. `sort(table, column: string) -> table`
+7. `sort_desc(table, column: string) -> table`
+8. `aggregate(table, group_by: string, agg_func: string, column: string) -> table`
+9. `sum(table, column: string) -> number`
+10. `average(table, column: string) -> number`
+11. `count(table) -> int`
+12. `min(table, column: string) -> number`
+13. `max(table, column: string) -> number`
+14. `filter(column: string, mode: single|multi) -> filter`
+15. `table_from(data: array) -> table`
+
+### Additional Documentation
+
+See `doc/lsp_step14_summary.md` for detailed information about:
+- Complete feature descriptions
+- Technical implementation details
+- Usage examples
+- Testing instructions
+- Future enhancement ideas
+
+---
+
+**Step 14 Complete**: Full LSP implementation with hover, autocomplete, and error system integration.

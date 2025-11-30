@@ -1,0 +1,317 @@
+// Comprehensive syntax test for WTLang
+// This file tests all currently implemented syntax elements
+
+// ===== TABLE DEFINITIONS =====
+
+// Basic table
+table SimpleTable {
+    id: int
+    name: string
+}
+
+// Table with all primitive types
+table AllTypes {
+    int_field: int
+    float_field: float
+    string_field: string
+    date_field: date
+    currency_field: currency
+    bool_field: bool
+}
+
+// Table with constraints (only unique and non_null supported)
+table ConstrainedTable {
+    id: int [unique, non_null]
+    email: string [non_null]
+    age: int
+    score: float
+}
+
+// Table with foreign key (references not currently supported)
+table Customer {
+    customer_id: int [unique, non_null]
+    name: string [non_null]
+}
+
+table Order {
+    order_id: int [unique, non_null]
+    customer_id: int
+    amount: currency
+}
+
+// ===== FUNCTION DEFINITIONS =====
+
+// Simple function with single parameter
+function double(x: int) -> int {
+    return x * 2
+}
+
+// Function with multiple parameters
+function add(a: int, b: int) -> int {
+    return a + b
+}
+
+// Function with int parameter (table type not supported as parameter)
+function triple(x: int) -> int {
+    return x * 3
+}
+
+// Function with conditionals
+function max_value(a: int, b: int) -> int {
+    if a > b {
+        return a
+    } else {
+        return b
+    }
+}
+
+// Function with local variables
+function calculate_tax(amount: currency, rate: float) -> currency {
+    let tax = amount * rate
+    let total = amount + tax
+    return total
+}
+
+// ===== EXTERNAL FUNCTIONS =====
+
+external function analyze_sentiment(input: string) -> float from "nlp.analysis"
+
+external function process_numbers(numbers: int) -> int from "data.processor"
+
+// ===== TEST BLOCKS =====
+
+test "basic arithmetic" {
+    let x = 5
+    let y = 10
+    let sum = x + y
+    // assert sum == 15  // assert not implemented
+}
+
+test "simple operations" {
+    let x = 10
+    let y = 20
+    let result = x + y
+    // assert result == 30  // assert not implemented
+}
+
+// ===== PAGE DEFINITIONS =====
+
+page HomePage {
+    // ===== DISPLAY STATEMENTS =====
+    
+    title "Syntax Test Page"
+    subtitle "Testing all WTLang features"
+    text "Welcome to the syntax test"
+    
+    // ===== VARIABLE DECLARATIONS =====
+    
+    // Type inference
+    let int_var = 42
+    let float_var = 3.14
+    let string_var = "hello"
+    let bool_var = true
+    
+    // Explicit type annotations
+    let typed_int: int = 100
+    let typed_float: float = 99.99
+    let typed_string: string = "world"
+    let typed_bool: bool = false
+    
+    // Declaration without initialization
+    let deferred: int
+    deferred = 50
+    
+    // ===== LITERALS =====
+    
+    let int_literal = 42
+    let negative_int = -10
+    let float_literal = 3.14159
+    let negative_float = -0.5
+    let string_literal = "test string"
+    let bool_true = true
+    let bool_false = false
+    
+    // Array literals
+    let numbers = [1, 2, 3, 4, 5]
+    let strings = ["a", "b", "c"]
+    let mixed = [1, 2, 3]
+    
+    // Filter literals
+    let filter1 = filter("department", single)
+    let filter2 = filter("role", multi)
+    let filter_array = [filter("dept", single), filter("position", multi)]
+    
+    // ===== OPERATORS =====
+    
+    // Arithmetic operators
+    let add_result = 10 + 5
+    let sub_result = 10 - 5
+    let mul_result = 10 * 5
+    let div_result = 10 / 5
+    let mod_result = 10 % 3
+    
+    // Comparison operators
+    let eq_result = 10 == 10
+    let neq_result = 10 != 5
+    let lt_result = 5 < 10
+    let lte_result = 5 <= 10
+    let gt_result = 10 > 5
+    let gte_result = 10 >= 5
+    
+    // Logical operators
+    let and_result = true && false
+    let or_result = true || false
+    let not_result = !true
+    
+    // Unary operators
+    let negation = -42
+    let logical_not = !false
+    
+    // Complex expressions
+    let complex = (10 + 5) * 2 - 3
+    let logical_complex = (5 > 3) && (10 < 20) || false
+    
+    // ===== FUNCTION CALLS =====
+    
+    // Built-in functions
+    let data = load_csv("test.csv", SimpleTable)
+    let row_count = count(data)
+    let sum_result = sum(data, "id")
+    let avg_result = average(data, "id")
+    let min_result = min(data, "id")
+    let max_result = max(data, "id")
+    
+    // Table operations with chaining
+    let sorted = sort(data, "name")
+    let sorted_desc = sort_desc(data, "name")
+    
+    // Display functions
+    show(data)
+    show(data, [filter("name", single)])
+    let edited = show_editable(data)
+    let edited_filtered = show_editable(data, [filter("name", multi)])
+    
+    // Save function
+    save_csv(edited, "output.csv")
+    
+    // User-defined function calls
+    let doubled = double(21)
+    let added = add(10, 20)
+    let tripled = triple(7)
+    let max_val = max_value(100, 200)
+    
+    // External function calls
+    let sentiment = analyze_sentiment("This is a test")
+    let processed_num = process_numbers(42)
+    
+    // ===== PIPELINE (CHAIN) OPERATIONS =====
+    
+    let pipeline_result = data
+        -> sort(_, "name")
+        -> count
+    
+    let multi_chain = data
+        -> sort_desc(_, "id")
+    
+    // ===== FIELD ACCESS =====
+    // Field access is used in generated code but not directly in WTLang expressions
+    
+    // ===== CONDITIONAL STATEMENTS =====
+    
+    if row_count > 0 {
+        text "Data found"
+        show(data)
+    }
+    
+    if row_count > 10 {
+        text "Many rows"
+    } else {
+        text "Few rows"
+    }
+    
+    // Nested conditionals
+    if row_count > 0 {
+        if row_count > 100 {
+            text "Large dataset"
+        } else {
+            text "Small dataset"
+        }
+    }
+    
+    // ===== SCOPING TESTS =====
+    
+    // Page-level variable
+    let page_var = 100
+    
+    section "Scoping Test" {
+        // Section can access page variables
+        let section_var = page_var + 50
+        text "Section var: {section_var}"
+        
+        button "Inner Button" {
+            // Button can access section and page variables
+            let button_var = section_var + page_var
+            text "Button var: {button_var}"
+        }
+    }
+    
+    if true {
+        // If block creates new scope
+        let if_var = 200
+        text "If var: {if_var}"
+    }
+    // ===== SECTIONS =====
+    
+    section "Summary" {
+        let total = sum(data, "amount")
+        let average_val = average(data, "amount")
+        
+        text "Total: {total}"
+        text "Average: {average_val}"
+    }
+    
+    // Nested sections
+    section "Outer Section" {
+        text "Outer content"
+        
+        section "Inner Section" {
+            text "Inner content"
+        }
+    }
+    
+    // ===== BUTTONS =====
+    
+    button "Save Data" {
+        save_csv(data, "saved_data.csv")
+        text "Saved successfully"
+    }
+    
+    button "Process" {
+        let sorted = sort(data, "id")
+        save_csv(sorted, "processed.csv")
+    }
+    
+    // ===== STRING INTERPOLATION =====
+    
+    text "Count: {row_count}"
+    text "Total: {sum_result}"
+    text "Multiple values: {row_count}, {sum_result}"
+}
+
+// ===== MULTIPLE PAGES =====
+
+page SecondPage {
+    title "Second Page"
+    
+    // Each page has independent scope
+    let second_page_var = 500
+    text "This is second_page_var: {second_page_var}"
+}
+
+page ThirdPage {
+    title "Third Page"
+    subtitle "Another independent page"
+    
+    let data = load_csv("other_data.csv", AllTypes)
+    show(data)
+}

@@ -38,5 +38,13 @@
     - **Supported Features**: All core features work: table definitions, pages, functions, external functions, conditionals, variables with type annotations, pipeline operator, built-in functions (load_csv, save_csv, show, show_editable, where/sort/aggregate, etc.).
     - **Test Suite**: Created `tests/fixtures/valid/syntax_complete.wt` testing every implemented syntax element (✅ compiles successfully with 913 tokens, 17 items).
     - **Recommendation**: Update tutorial.md to clearly mark unimplemented features, or implement missing features in future steps.
-
+17. (Done). Review the code generation strategy in the compiler. It's important to refactor the compiler to allow generating code for various backends, and to allow manual editing of code generation templates, by clearly isolating them, better if they are in separate files. Create a document to detail the possibile architectures / designs and related impacts in terms of changes to implement them in the compiler. **Update**: Comprehensive design document created (`codegen_refactoring_design.md`) analyzing four architecture alternatives:
+    - **Architecture A**: Template-based with embedded templates (readable, versionable, medium effort)
+    - **Architecture B**: External template files with runtime loading (user-customizable, high flexibility)
+    - **Architecture C**: Intermediate Representation based (clean separation, high effort, over-engineered for current needs)
+    - **Architecture D**: Plugin-based code generator registry (extreme extensibility, very complex)
+    - **Recommended**: Hybrid approach combining A+B - external templates with embedded fallbacks, providing zero-config experience while enabling full user customization
+    - **Implementation Plan**: 6-week phased approach - refactor current generator (week 1-2), implement template system (week 3-4), external template support (week 5), documentation (week 6)
+    - **Benefits**: User-editable templates without recompiling, multi-backend support (Streamlit, React, Jupyter), better maintainability, <5% performance overhead
+    - **Document includes**: Detailed code examples, template samples, migration strategy, security considerations, testing approach, and example customizations
 

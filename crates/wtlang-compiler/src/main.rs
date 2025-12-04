@@ -83,7 +83,7 @@ fn build_command(input: PathBuf, output: PathBuf) -> Result<()> {
         return Err(anyhow::anyhow!("Semantic analysis failed with {} error(s)", errors.len()));
     }
     
-    println!("✓ Semantic analysis passed");
+    println!("[OK] Semantic analysis passed");
     
     // Code generation
     let mut codegen = codegen::CodeGenerator::new();
@@ -109,7 +109,7 @@ fn build_command(input: PathBuf, output: PathBuf) -> Result<()> {
         .with_context(|| format!("Failed to write requirements.txt: {}", req_path.display()))?;
     println!("Generated: {}", req_path.display());
     
-    println!("\n✓ Compilation successful!");
+    println!("\n[OK] Compilation successful!");
     println!("\nTo run your application:");
     println!("  cd {}", output.display());
     println!("  pip install -r requirements.txt");
@@ -133,7 +133,7 @@ fn check_command(input: PathBuf) -> Result<()> {
             anyhow::anyhow!("Lexical analysis failed")
         })?;
     
-    println!("✓ Lexical analysis passed ({} tokens)", tokens.len());
+    println!("[OK] Lexical analysis passed ({} tokens)", tokens.len());
     
     // Parsing
     let mut parser = Parser::new(tokens);
@@ -143,7 +143,7 @@ fn check_command(input: PathBuf) -> Result<()> {
             anyhow::anyhow!("Parsing failed")
         })?;
     
-    println!("✓ Parsing passed ({} items)", program.items.len());
+    println!("[OK] Parsing passed ({} items)", program.items.len());
     
     // Semantic analysis
     let mut analyzer = SemanticAnalyzer::new();
@@ -155,8 +155,8 @@ fn check_command(input: PathBuf) -> Result<()> {
         return Err(anyhow::anyhow!("Semantic analysis failed with {} error(s)", errors.len()));
     }
     
-    println!("✓ Semantic analysis passed");
-    println!("\n✓ No errors found!");
+    println!("[OK] Semantic analysis passed");
+    println!("\n[OK] No errors found!");
     
     Ok(())
 }

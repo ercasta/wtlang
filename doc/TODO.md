@@ -52,5 +52,30 @@
     - **IR Benefits for Debugger**: Source-to-target mapping, breakpoint translation, watch expressions, runtime validation, and time-travel debugging
     - **IR Advantages**: Platform normalization, optimization opportunities, static analysis, incremental compilation, and better testing
     - **Recommended Architecture**: Three-layer hybrid (AST → IR → Templates) with IR serving as optimization and analysis layer while templates handle final rendering
-    - **Implementation Strategy**: 10-week phased approach with clear milestones and deliverables for each tool integration  
+    - **Implementation Strategy**: 10-week phased approach with clear milestones and deliverables for each tool integration 
+19. (Done) Implement the "Intermediate Representation" strategy defined in doc/codegen_refactoring_desing.md for compiler / LSP refactoring. Be sure to run compilation tests and tests to the LSP to check the correcteness of the refactoring. **Update**: IR implementation completed successfully:
+    - **IR Module Structure**: Created complete IR system in wtlang-core with 4 submodules:
+      - `ir/types.rs` (~200 lines): Full type system with Type enum, TableSchema, Field, FieldType, Constraint, FilterMode
+      - `ir/nodes.rs` (~300 lines): IRItem and IRNode definitions representing all language constructs
+      - `ir/module.rs` (~100 lines): IRModule containing items, symbols, and type environment with helper methods
+      - `ir/builder.rs` (~600 lines): AST→IR conversion with semantic analysis integration and local variable tracking
+    - **Compiler Integration**: Updated wtlang-compiler to use IR pipeline:
+      - `generate()` method now delegates to IR-based generation via IRBuilder
+      - Added `generate_from_ir()` as main entry point for code generation
+      - Implemented IR node/expression generators maintaining full backward compatibility
+      - Fixed namespace conflicts between AST and IR types (FilterMode ambiguity resolved)
+    - **Key Implementation Details**:
+      - IR builder runs semantic analysis first to populate global symbol table
+      - Local variables tracked separately in `local_vars` HashMap to handle page/function scopes
+      - Special handling for `_` placeholder in chaining expressions (doesn't require lookup)
+      - Parameters added to local environment when lowering function definitions
+      - Scopes cleared when entering new page/function/test to prevent variable leakage
+    - **Testing Results**: All 11 example files compile successfully with IR-based compiler:
+      - 01_hello.wt, 02_tables.wt, 03_chaining.wt, 04_multi_page.wt ✅
+      - 05_external_functions.wt, 06_validation.wt, 07_filters.wt ✅
+      - 08_scoping_test.wt, 09_joining.wt, simple_scoping.wt, test_decl_only.wt ✅
+    - **Architecture Achieved**: Clean three-layer separation (AST → IR → Code Generation) as designed
+    - **LSP Integration**: Pending - next step is to update LSP to use IR for analysis, hover, and completion
+    - **Benefits Realized**: Platform-independent IR enables future multi-backend support, better type information available for tooling
+
 

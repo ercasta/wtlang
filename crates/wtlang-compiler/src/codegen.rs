@@ -1,11 +1,14 @@
 // Code generator for WTLang -> Python/Streamlit
-use wtlang_core::ast::*;
+use wtlang_core::ast::{self, *};
+use wtlang_core::ir::{self, IRModule, IRBuilder, IRNode, IRExpr, IRItem, FilterSpec, TextStyle, Literal, BinOp, UnOp, TableSchema, ExternalInfo};
 use std::collections::HashMap;
 
 pub struct CodeGenerator {
     indent_level: usize,
-    table_defs: HashMap<String, TableDef>,
-    external_functions: HashMap<String, ExternalFunction>,
+    table_schemas: HashMap<String, TableSchema>,
+    table_defs: HashMap<String, TableDef>, // Keep for AST compatibility
+    external_functions: HashMap<String, ExternalInfo>,
+    ext_functions_ast: HashMap<String, ExternalFunction>, // Keep for AST compatibility
     key_counter: usize,
 }
 
@@ -13,40 +16,55 @@ impl CodeGenerator {
     pub fn new() -> Self {
         CodeGenerator {
             indent_level: 0,
+            table_schemas: HashMap::new(),
             table_defs: HashMap::new(),
             external_functions: HashMap::new(),
+            ext_functions_ast: HashMap::new(),
             key_counter: 0,
         }
     }
 
-    pub fn generate(&mut self, program: &Program) -> Result<HashMap<String, String>, String> {
+    /// Generate code from IR
+    pub fn generate_from_ir(&mut self, ir_module: &IRModule) -> Result<HashMap<String, String>, String> {
         let mut output_files = HashMap::new();
         
-        // First pass: collect table definitions and external functions
-        for item in &program.items {
+        // First pass: collect table schemas and external functions
+        for item in &ir_module.items {
             match item {
-                ProgramItem::TableDef(table_def) => {
-                    self.table_defs.insert(table_def.name.clone(), table_def.clone());
+                IRItem::TableDef { name, schema, .. } => {
+                    self.table_schemas.insert(name.clone(), schema.clone());
                 }
-                ProgramItem::ExternalFunction(ext_fn) => {
-                    self.external_functions.insert(ext_fn.name.clone(), ext_fn.clone());
+                IRItem::FunctionDef { name, is_external, external_info, .. } if *is_external => {
+                    if let Some(info) = external_info {
+                        self.external_functions.insert(name.clone(), info.clone());
+                    }
                 }
                 _ => {}
             }
         }
         
         // Second pass: generate pages
-        for item in &program.items {
-            if let ProgramItem::Page(page) = item {
-                let code = self.generate_page(page)?;
-                output_files.insert(format!("{}.py", page.name), code);
+        for item in &ir_module.items {
+            if let IRItem::PageDef { name, body, .. } = item {
+                let code = self.generate_page_from_ir(name, body)?;
+                output_files.insert(format!("{}.py", name), code);
             }
         }
         
         Ok(output_files)
     }
 
-    fn generate_page(&mut self, page: &Page) -> Result<String, String> {
+    /// Legacy method: generate from AST (will delegate to IR-based generation)
+    pub fn generate(&mut self, program: &Program) -> Result<HashMap<String, String>, String> {
+        // Convert AST to IR first
+        let mut builder = IRBuilder::new();
+        let ir_module = builder.build(program)?;
+        
+        // Use IR-based generation
+        self.generate_from_ir(&ir_module)
+    }
+
+    fn generate_page_from_ir(&mut self, page_name: &str, body: &[IRNode]) -> Result<String, String> {
         let mut code = String::new();
         
         // Standard imports
@@ -112,106 +130,275 @@ impl CodeGenerator {
         code.push_str("\n");
         
         // Page configuration
-        code.push_str(&format!("# Page: {}\n", page.name));
+        code.push_str(&format!("# Page: {}\n", page_name));
         code.push_str("\n");
         
-        // Generate statements
-        for stmt in &page.statements {
-            code.push_str(&self.generate_statement(stmt)?);
+        // Generate IR nodes
+        for node in body {
+            code.push_str(&self.generate_ir_node(node)?);
         }
         
         Ok(code)
     }
 
-    fn generate_statement(&mut self, stmt: &Statement) -> Result<String, String> {
+    fn generate_ir_node(&mut self, node: &IRNode) -> Result<String, String> {
         let indent = self.get_indent();
         
-        match stmt {
-            Statement::Title(text) => {
-                Ok(format!("{}st.title(\"{}\")\n", indent, self.escape_string(text)))
-            },
-            Statement::Subtitle(text) => {
-                Ok(format!("{}st.subheader(\"{}\")\n", indent, self.escape_string(text)))
-            },
-            Statement::Text(text) => {
-                // Handle string interpolation
-                let formatted = self.format_string_interpolation(text);
-                Ok(format!("{}st.write({})\n", indent, formatted))
-            },
-            Statement::Button { label, body } => {
+        match node {
+            IRNode::ShowText { text, style, .. } => {
+                match style {
+                    TextStyle::Title => Ok(format!("{}st.title(\"{}\")\n", indent, self.escape_string(text))),
+                    TextStyle::Subtitle => Ok(format!("{}st.subheader(\"{}\")\n", indent, self.escape_string(text))),
+                    TextStyle::Normal => {
+                        let formatted = self.format_string_interpolation(text);
+                        Ok(format!("{}st.write({})\n", indent, formatted))
+                    }
+                }
+            }
+            
+            IRNode::Button { label, body, .. } => {
                 let mut code = format!("{}if st.button(\"{}\"):\n", indent, self.escape_string(label));
                 self.indent_level += 1;
-                for s in body {
-                    code.push_str(&self.generate_statement(s)?);
+                for node in body {
+                    code.push_str(&self.generate_ir_node(node)?);
                 }
                 self.indent_level -= 1;
                 Ok(code)
-            },
-            Statement::Section { title, body } => {
+            }
+            
+            IRNode::Section { title, body, .. } => {
                 let mut code = format!("{}with st.container():\n", indent);
                 self.indent_level += 1;
                 code.push_str(&format!("{}st.markdown(\"### {}\")\n", self.get_indent(), self.escape_string(title)));
-                for s in body {
-                    code.push_str(&self.generate_statement(s)?);
+                for node in body {
+                    code.push_str(&self.generate_ir_node(node)?);
                 }
                 self.indent_level -= 1;
                 Ok(code)
-            },
-            Statement::Let { name, type_annotation: _, value } => {
-                // Type annotations are used for semantic analysis, not code generation
+            }
+            
+            IRNode::Binding { name, value, .. } => {
                 if let Some(val) = value {
-                    let value_code = self.generate_expr(val)?;
+                    let value_code = self.generate_ir_expr(val)?;
                     Ok(format!("{}{} = {}\n", indent, name, value_code))
                 } else {
-                    // Declaration without initialization - initialize to None
-                    // This will be assigned later (verified by semantic analysis)
                     Ok(format!("{}{} = None  # Will be assigned later\n", indent, name))
                 }
-            },
-            Statement::Assign { name, value } => {
-                let value_code = self.generate_expr(value)?;
-                Ok(format!("{}{} = {}\n", indent, name, value_code))
-            },
-            Statement::If { condition, then_branch, else_branch } => {
-                let cond_code = self.generate_expr(condition)?;
+            }
+            
+            IRNode::Assignment { target, value, .. } => {
+                let value_code = self.generate_ir_expr(value)?;
+                Ok(format!("{}{} = {}\n", indent, target, value_code))
+            }
+            
+            IRNode::Conditional { condition, then_branch, else_branch, .. } => {
+                let cond_code = self.generate_ir_expr(condition)?;
                 let mut code = format!("{}if {}:\n", indent, cond_code);
                 self.indent_level += 1;
-                for s in then_branch {
-                    code.push_str(&self.generate_statement(s)?);
+                for node in then_branch {
+                    code.push_str(&self.generate_ir_node(node)?);
                 }
                 self.indent_level -= 1;
                 
-                if let Some(else_stmts) = else_branch {
+                if let Some(else_nodes) = else_branch {
                     code.push_str(&format!("{}else:\n", indent));
                     self.indent_level += 1;
-                    for s in else_stmts {
-                        code.push_str(&self.generate_statement(s)?);
+                    for node in else_nodes {
+                        code.push_str(&self.generate_ir_node(node)?);
                     }
                     self.indent_level -= 1;
                 }
                 Ok(code)
-            },
-            Statement::Return(expr) => {
-                let expr_code = self.generate_expr(expr)?;
-                Ok(format!("{}return {}\n", indent, expr_code))
-            },
-            Statement::Forall { var, iterable, body } => {
-                let iter_code = self.generate_expr(iterable)?;
-                let mut code = format!("{}for {} in {}:\n", indent, var, iter_code);
+            }
+            
+            IRNode::Loop { variable, iterable, body, .. } => {
+                let iter_code = self.generate_ir_expr(iterable)?;
+                let mut code = format!("{}for {} in {}:\n", indent, variable, iter_code);
                 self.indent_level += 1;
-                for s in body {
-                    code.push_str(&self.generate_statement(s)?);
+                for node in body {
+                    code.push_str(&self.generate_ir_node(node)?);
                 }
                 self.indent_level -= 1;
                 Ok(code)
-            },
-            Statement::FunctionCall(call) => {
-                let call_code = self.generate_function_call(call)?;
-                Ok(format!("{}{}\n", indent, call_code))
-            },
+            }
+            
+            IRNode::Return { value, .. } => {
+                if let Some(expr) = value {
+                    let expr_code = self.generate_ir_expr(expr)?;
+                    Ok(format!("{}return {}\n", indent, expr_code))
+                } else {
+                    Ok(format!("{}return\n", indent))
+                }
+            }
+            
+            IRNode::ExprStmt { expr, .. } => {
+                let expr_code = self.generate_ir_expr(expr)?;
+                Ok(format!("{}{}\n", indent, expr_code))
+            }
+            
+            IRNode::ShowTable { table, filters, editable, key, .. } => {
+                let table_expr = self.generate_ir_expr(table)?;
+                
+                if filters.is_empty() {
+                    // No filters
+                    if *editable {
+                        Ok(format!("{}st.data_editor({}, key=\"editor_{}\", use_container_width=True)\n", 
+                            indent, table_expr, key))
+                    } else {
+                        Ok(format!("{}st.dataframe({})\n", indent, table_expr))
+                    }
+                } else {
+                    // With filters
+                    let filter_list: Vec<String> = filters.iter()
+                        .map(|f| format!("('{}', '{}')", f.column, if f.mode == ir::FilterMode::Single { "single" } else { "multi" }))
+                        .collect();
+                    
+                    Ok(format!("{}_show_filtered({}, [{}], editable={}, key_prefix='f_{}')\n",
+                        indent, table_expr, filter_list.join(", "), editable, key))
+                }
+            }
         }
     }
 
+    fn generate_ir_expr(&mut self, expr: &IRExpr) -> Result<String, String> {
+        match expr {
+            IRExpr::Literal { value, .. } => {
+                match value {
+                    Literal::Int(n) => Ok(n.to_string()),
+                    Literal::Float(f) => Ok(f.to_string()),
+                    Literal::String(s) => Ok(format!("\"{}\"", self.escape_string(s))),
+                    Literal::Bool(b) => Ok(if *b { "True" } else { "False" }.to_string()),
+                }
+            }
+            
+            IRExpr::Variable { name, .. } => Ok(name.clone()),
+            
+            IRExpr::BinaryOp { op, left, right, .. } => {
+                let left_code = self.generate_ir_expr(left)?;
+                let right_code = self.generate_ir_expr(right)?;
+                let op_str = match op {
+                    BinOp::Add => "+",
+                    BinOp::Sub => "-",
+                    BinOp::Mul => "*",
+                    BinOp::Div => "/",
+                    BinOp::Mod => "%",
+                    BinOp::Eq => "==",
+                    BinOp::Ne => "!=",
+                    BinOp::Lt => "<",
+                    BinOp::Le => "<=",
+                    BinOp::Gt => ">",
+                    BinOp::Ge => ">=",
+                    BinOp::And => "and",
+                    BinOp::Or => "or",
+                };
+                Ok(format!("({} {} {})", left_code, op_str, right_code))
+            }
+            
+            IRExpr::UnaryOp { op, operand, .. } => {
+                let operand_code = self.generate_ir_expr(operand)?;
+                let op_str = match op {
+                    UnOp::Not => "not",
+                    UnOp::Neg => "-",
+                };
+                Ok(format!("{} {}", op_str, operand_code))
+            }
+            
+            IRExpr::FunctionCall { function, args, .. } => {
+                self.generate_ir_function_call(function, args)
+            }
+            
+            IRExpr::FieldAccess { object, field, .. } => {
+                let obj_code = self.generate_ir_expr(object)?;
+                Ok(format!("{}.{}", obj_code, field))
+            }
+            
+            IRExpr::Index { object, index, .. } => {
+                let obj_code = self.generate_ir_expr(object)?;
+                let idx_code = self.generate_ir_expr(index)?;
+                Ok(format!("{}[{}]", obj_code, idx_code))
+            }
+            
+            IRExpr::Chain { left, right, .. } => {
+                // Pipeline operator: left |> right
+                // In Python, this is a function call: right(left)
+                let left_code = self.generate_ir_expr(left)?;
+                
+                // If right is a function call, insert left as first argument
+                if let IRExpr::FunctionCall { function, args, .. } = &**right {
+                    let mut all_args = vec![left.as_ref().clone()];
+                    all_args.extend(args.clone());
+                    self.generate_ir_function_call(function, &all_args)
+                } else {
+                    let right_code = self.generate_ir_expr(right)?;
+                    Ok(format!("{}({})", right_code, left_code))
+                }
+            }
+            
+            IRExpr::Lambda { params, body, .. } => {
+                let params_str = params.join(", ");
+                let body_code = self.generate_ir_expr(body)?;
+                Ok(format!("lambda {}: {}", params_str, body_code))
+            }
+            
+            IRExpr::TableConstructor { .. } |
+            IRExpr::ArrayConstructor { .. } => {
+                // These would need special handling
+                Ok("{}".to_string())
+            }
+        }
+    }
+
+    fn generate_ir_function_call(&mut self, function: &str, args: &[IRExpr]) -> Result<String, String> {
+        let args_code: Result<Vec<_>, _> = args.iter()
+            .map(|arg| self.generate_ir_expr(arg))
+            .collect();
+        let args_code = args_code?;
+        
+        // Handle built-in functions
+        match function {
+            "load_csv" => {
+                if args_code.is_empty() {
+                    return Err("load_csv requires at least a file path argument".to_string());
+                }
+                Ok(format!("pd.read_csv({})", args_code[0]))
+            }
+            "save_csv" => {
+                if args_code.len() < 2 {
+                    return Err("save_csv requires table and file path arguments".to_string());
+                }
+                Ok(format!("{}.to_csv({}, index=False)", args_code[0], args_code[1]))
+            }
+            "where" => {
+                if args_code.is_empty() {
+                    return Err("where requires at least a table argument".to_string());
+                }
+                if args_code.len() < 2 {
+                    return Ok(args_code[0].clone());
+                }
+                // Lambda expression for filter
+                Ok(format!("{}[{}]", args_code[0], args_code[1]))
+            }
+            "sort" => {
+                if args_code.len() < 2 {
+                    return Err("sort requires table and column arguments".to_string());
+                }
+                Ok(format!("{}.sort_values(by={})", args_code[0], args_code[1]))
+            }
+            "aggregate" => {
+                if args_code.len() < 3 {
+                    return Err("aggregate requires table, column, and operation arguments".to_string());
+                }
+                // args: table, column, operation
+                Ok(format!("{}[{}].{}()", args_code[0], args_code[1], args_code[2].trim_matches('"')))
+            }
+            _ => {
+                // Regular function call
+                Ok(format!("{}({})", function, args_code.join(", ")))
+            }
+        }
+    }
+
+    // AST-based expression and function call generation (still needed for external code that hasn't migrated to IR)
     fn generate_expr(&mut self, expr: &Expr) -> Result<String, String> {
         match expr {
             Expr::IntLiteral(n) => Ok(n.to_string()),
@@ -484,8 +671,8 @@ impl CodeGenerator {
         // Build filter list as Python code
         let filter_list: Vec<String> = filters.iter().map(|f| {
             let mode = match f.mode {
-                FilterMode::Single => "single",
-                FilterMode::Multi => "multi",
+                ast::FilterMode::Single => "single",
+                ast::FilterMode::Multi => "multi",
             };
             format!("('{}', '{}')", f.column, mode)
         }).collect();

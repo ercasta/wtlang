@@ -8,6 +8,8 @@ description = "Core library for WTLang compiler and tools"
 
 [dependencies]
 thiserror.workspace = true
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 [lib]
 name = "wtlang_core"

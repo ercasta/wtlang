@@ -167,6 +167,12 @@ pub struct FilterSpec {
     pub mode: FilterMode,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SortSpec {
+    pub column: String,
+    pub ascending: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TextStyle {
     Title,
@@ -239,6 +245,52 @@ pub enum IRExpr {
         body: Box<IRExpr>,
         ty: Type,
     },
+    
+    // Query operations
+    Where {
+        table: Box<IRExpr>,
+        condition: Box<IRExpr>,
+        ty: Type,
+    },
+    
+    SortBy {
+        table: Box<IRExpr>,
+        columns: Vec<SortSpec>,
+        ty: Type,
+    },
+    
+    ColumnSelect {
+        table: Box<IRExpr>,
+        columns: Vec<String>,
+        ty: Type,
+    },
+    
+    // Set operations
+    Union {
+        left: Box<IRExpr>,
+        right: Box<IRExpr>,
+        ty: Type,
+    },
+    
+    Minus {
+        left: Box<IRExpr>,
+        right: Box<IRExpr>,
+        ty: Type,
+    },
+    
+    Intersect {
+        left: Box<IRExpr>,
+        right: Box<IRExpr>,
+        ty: Type,
+    },
+    
+    // Reference navigation (automatic join/lookup)
+    RefNavigation {
+        object: Box<IRExpr>,
+        field: String,
+        target_table: String,
+        ty: Type,
+    },
 }
 
 impl IRExpr {
@@ -254,7 +306,14 @@ impl IRExpr {
             IRExpr::Chain { ty, .. } |
             IRExpr::TableConstructor { ty, .. } |
             IRExpr::ArrayConstructor { ty, .. } |
-            IRExpr::Lambda { ty, .. } => ty,
+            IRExpr::Lambda { ty, .. } |
+            IRExpr::Where { ty, .. } |
+            IRExpr::SortBy { ty, .. } |
+            IRExpr::ColumnSelect { ty, .. } |
+            IRExpr::Union { ty, .. } |
+            IRExpr::Minus { ty, .. } |
+            IRExpr::Intersect { ty, .. } |
+            IRExpr::RefNavigation { ty, .. } => ty,
         }
     }
 }
@@ -282,6 +341,12 @@ pub enum BinOp {
     Ge,
     And,
     Or,
+    
+    // Set operations (used separately from Union/Minus/Intersect IRExpr variants)
+    // These are for when we need to represent set ops as binary operations
+    Union,
+    SetMinus,
+    Intersect,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -307,6 +372,9 @@ impl From<&crate::ast::BinaryOp> for BinOp {
             crate::ast::BinaryOp::GreaterThanEqual => BinOp::Ge,
             crate::ast::BinaryOp::And => BinOp::And,
             crate::ast::BinaryOp::Or => BinOp::Or,
+            crate::ast::BinaryOp::Union => BinOp::Union,
+            crate::ast::BinaryOp::Minus => BinOp::SetMinus,
+            crate::ast::BinaryOp::Intersect => BinOp::Intersect,
         }
     }
 }

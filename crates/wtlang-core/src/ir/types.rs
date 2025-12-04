@@ -111,6 +111,22 @@ impl TableSchema {
     pub fn get_field_type(&self, field_name: &str) -> Option<&FieldType> {
         self.get_field(field_name).map(|f| &f.ty)
     }
+    
+    pub fn get_key_field(&self) -> Option<&Field> {
+        // Find field marked with PrimaryKey constraint
+        for constraint in &self.constraints {
+            if let Constraint::PrimaryKey(name) = constraint {
+                return self.get_field(name);
+            }
+        }
+        None
+    }
+    
+    pub fn has_ref_to(&self, table_name: &str) -> bool {
+        self.fields.iter().any(|f| {
+            matches!(&f.ty, FieldType::Ref { table_name: tn } if tn == table_name)
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -127,6 +143,9 @@ pub enum FieldType {
     Bool,
     Date,
     Currency,
+    Ref {
+        table_name: String,
+    },
 }
 
 impl fmt::Display for FieldType {
@@ -138,6 +157,7 @@ impl fmt::Display for FieldType {
             FieldType::Bool => write!(f, "bool"),
             FieldType::Date => write!(f, "date"),
             FieldType::Currency => write!(f, "currency"),
+            FieldType::Ref { table_name } => write!(f, "ref {}", table_name),
         }
     }
 }
@@ -170,6 +190,7 @@ impl From<&crate::ast::Type> for Type {
                 // Placeholder - will be resolved with actual schema during semantic analysis
                 Type::Table(TableSchema::new(name.clone()))
             }
+            crate::ast::Type::Ref(_) => Type::Error, // Will be resolved during semantic analysis
         }
     }
 }
@@ -192,6 +213,9 @@ impl From<&crate::ast::Type> for FieldType {
             crate::ast::Type::Bool => FieldType::Bool,
             crate::ast::Type::Date => FieldType::Date,
             crate::ast::Type::Currency => FieldType::Currency,
+            crate::ast::Type::Ref(table_name) => FieldType::Ref {
+                table_name: table_name.clone(),
+            },
             _ => panic!("Cannot convert {:?} to FieldType", ast_type),
         }
     }

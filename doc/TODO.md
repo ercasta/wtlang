@@ -77,6 +77,43 @@
     - **Architecture Achieved**: Clean three-layer separation (AST → IR → Code Generation) as designed
     - **LSP Integration**: Pending - next step is to update LSP to use IR for analysis, hover, and completion
     - **Benefits Realized**: Platform-independent IR enables future multi-backend support, better type information available for tooling
-20. (TODO) File "doc/builtin_query_language.md" explains simple query operations, and "doc/keys_and_refs.md" explains references and lookup operations. Analyzed the current documentation and code implementation and create a documentation file with all the steps needed to implement these features and related code generation.
+20. (Done) File "doc/builtin_query_language.md" explains simple query operations, and "doc/keys_and_refs.md" explains references and lookup operations. Analyzed the current documentation and code implementation and create a documentation file with all the steps needed to implement these features and related code generation.
+21. (Partially Complete) Implement the changes detailed in "doc/query_language_implementation_plan.md". **Update**: Foundation work completed for query language features:
+    - **Phase 1 - Lexer & AST Extensions (✅ Complete)**:
+      - Added new keywords: `where`, `by`, `asc`, `desc`, `key`, `ref` to TokenType enum
+      - Extended AST Type enum with `Ref(String)` for reference types
+      - Added `Key` constraint to Constraint enum
+      - Added new expression types: `Where`, `SortBy`, `ColumnSelect` with `SortColumn` struct
+      - Added set operation types to BinaryOp: `Union`, `Minus`, `Intersect`
+    - **Phase 1 - Parser Extensions (✅ Complete)**:
+      - Updated `parse_type()` to handle `ref TableName` syntax
+      - Updated `parse_constraints()` to recognize `key` constraint
+      - Implemented `parse_where_sort()` for infix where syntax: `table where condition`
+      - Implemented sort by parsing: `table sort by col1 asc, col2 desc`
+      - Extended `parse_postfix()` to handle column selection: `table[col1, col2]`
+      - Added `check_identifier()` helper method for bracket disambiguation
+      - Updated operator precedence: chain → where/sort → or → and → equality → comparison
+    - **Phase 2 - IR Type System (✅ Complete)**:
+      - Extended FieldType enum with `Ref { table_name: String }` variant
+      - Added Display implementation for Ref types
+      - Updated From<ast::Type> conversions to handle Ref types
+      - Added helper methods to TableSchema: `get_key_field()`, `has_ref_to()`
+    - **Phase 2 - IR Nodes (✅ Complete)**:
+      - Added IRExpr variants: `Where`, `SortBy`, `ColumnSelect`, `Union`, `Minus`, `Intersect`, `RefNavigation`
+      - Added `SortSpec` struct with column name and ascending flag
+      - Extended BinOp enum with `Union`, `SetMinus`, `Intersect` for set operations
+      - Updated `get_type()` to handle all new expression variants
+      - Updated From<ast::BinaryOp> to convert set operation types
+    - **Remaining Work** (Not Yet Implemented):
+      - Phase 2: IR Builder lowering for new expressions (AST→IR conversion)
+      - Phase 3: Symbol Table extensions for key/ref tracking
+      - Phase 3: Semantic Analysis validation for keys and references
+      - Phase 4: Code Generation for pandas (where/sort/select/union/minus/intersect/refs)
+      - Phase 5: LSP updates (error codes, hover, completions)
+      - Phase 6: Documentation updates and examples
+      - Phase 7: Comprehensive error handling
+      - Phase 8: Testing suite
+    - **Current Status**: Syntax parsing works, but IR builder and code generation need implementation before features are usable. The foundation is solid and follows the architecture laid out in the implementation plan.
+    - **Next Steps**: Complete IR builder lowering (Phase 2 remaining), then proceed through Phases 3-8 as detailed in `doc/query_language_implementation_plan.md`
 
 

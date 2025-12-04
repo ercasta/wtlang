@@ -116,6 +116,11 @@ impl Parser {
             TokenType::Currency => Ok(Type::Currency),
             TokenType::Bool => Ok(Type::Bool),
             TokenType::Filter => Ok(Type::Filter),  // filter type
+            TokenType::Ref => {
+                // ref TableName
+                let table_name = self.expect_identifier()?;
+                Ok(Type::Ref(table_name))
+            }
             _ => {
                 self.add_error(
                     ErrorCode::E2003,
@@ -134,6 +139,7 @@ impl Parser {
             let constraint = match ident.as_str() {
                 "unique" => Constraint::Unique,
                 "non_null" => Constraint::NonNull,
+                "key" => Constraint::Key,
                 _ => {
                     self.add_error(
                         ErrorCode::E2012,
@@ -377,11 +383,11 @@ impl Parser {
     }
 
     fn parse_chain(&mut self) -> Result<Expr, ()> {
-        let mut left = self.parse_or()?;
+        let mut left = self.parse_where_sort()?;
         
         while self.check(&TokenType::Arrow) {
             self.advance();
-            let right = self.parse_or()?;
+            let right = self.parse_where_sort()?;
             left = Expr::Chain {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -389,6 +395,55 @@ impl Parser {
         }
         
         Ok(left)
+    }
+    
+    fn parse_where_sort(&mut self) -> Result<Expr, ()> {
+        let mut expr = self.parse_or()?;
+        
+        loop {
+            if self.check(&TokenType::Where) {
+                // Parse: table where condition
+                self.advance();
+                let condition = self.parse_or()?;
+                expr = Expr::Where {
+                    table: Box::new(expr),
+                    condition: Box::new(condition),
+                };
+            } else if self.check(&TokenType::Identifier("sort".to_string())) {
+                // Parse: table sort by col1 [asc|desc], col2 [asc|desc], ...
+                self.advance();
+                self.expect(TokenType::By)?;
+                
+                let mut columns = Vec::new();
+                loop {
+                    let col_name = self.expect_identifier()?;
+                    let ascending = if self.check(&TokenType::Asc) {
+                        self.advance();
+                        true
+                    } else if self.check(&TokenType::Desc) {
+                        self.advance();
+                        false
+                    } else {
+                        true  // Default to ascending
+                    };
+                    columns.push(SortColumn { name: col_name, ascending });
+                    
+                    if !self.check(&TokenType::Comma) {
+                        break;
+                    }
+                    self.advance();
+                }
+                
+                expr = Expr::SortBy {
+                    table: Box::new(expr),
+                    columns,
+                };
+            } else {
+                break;
+            }
+        }
+        
+        Ok(expr)
     }
 
     fn parse_or(&mut self) -> Result<Expr, ()> {
@@ -544,12 +599,50 @@ impl Parser {
                 };
             } else if self.check(&TokenType::LeftBracket) {
                 self.advance();
-                let index = self.parse_expression()?;
-                self.expect(TokenType::RightBracket)?;
-                expr = Expr::Index {
-                    object: Box::new(expr),
-                    index: Box::new(index),
-                };
+                
+                // Check if it's column selection [col1, col2] or index [expr]
+                // Column selection starts with identifier and may have commas
+                if self.check_identifier() {
+                    // Try parsing as column selection
+                    let first_col = self.expect_identifier()?;
+                    
+                    if self.check(&TokenType::Comma) {
+                        // Multiple columns: definitely column selection
+                        let mut columns = vec![first_col];
+                        while self.check(&TokenType::Comma) {
+                            self.advance();
+                            columns.push(self.expect_identifier()?);
+                        }
+                        self.expect(TokenType::RightBracket)?;
+                        expr = Expr::ColumnSelect {
+                            table: Box::new(expr),
+                            columns,
+                        };
+                    } else if self.check(&TokenType::RightBracket) {
+                        // Single column: table[col]
+                        self.advance();
+                        expr = Expr::ColumnSelect {
+                            table: Box::new(expr),
+                            columns: vec![first_col],
+                        };
+                    } else {
+                        // Something else after identifier - not column selection
+                        // This is actually an error, but we'll just fail
+                        self.add_error(
+                            ErrorCode::E2001,
+                            "Expected ',' or ']' in column selection".to_string()
+                        );
+                        return Err(());
+                    }
+                } else {
+                    // Not an identifier, parse as index expression
+                    let index = self.parse_expression()?;
+                    self.expect(TokenType::RightBracket)?;
+                    expr = Expr::Index {
+                        object: Box::new(expr),
+                        index: Box::new(index),
+                    };
+                }
             } else {
                 break;
             }
@@ -698,6 +791,13 @@ impl Parser {
             return false;
         }
         std::mem::discriminant(&self.peek().token_type) == std::mem::discriminant(token_type)
+    }
+    
+    fn check_identifier(&self) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+        matches!(self.peek().token_type, TokenType::Identifier(_))
     }
 
     fn expect(&mut self, token_type: TokenType) -> Result<(), ()> {

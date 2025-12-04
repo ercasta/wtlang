@@ -37,6 +37,7 @@ pub enum Type {
     Bool,
     Table(String), // Table<TypeName>
     Filter,        // Filter type for table column filters
+    Ref(String),   // Reference to another table by name
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,6 +58,7 @@ pub enum Constraint {
     NonNull,
     Validate(Expr),
     References { table: String, field: String },
+    Key,  // Mark field as primary key
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -129,6 +131,17 @@ pub enum Expr {
     TableLiteral(Vec<(String, Expr)>),
     ArrayLiteral(Vec<Expr>),
     FilterLiteral(FilterDef),
+    
+    // Query language expressions
+    Where { table: Box<Expr>, condition: Box<Expr> },
+    SortBy { table: Box<Expr>, columns: Vec<SortColumn> },
+    ColumnSelect { table: Box<Expr>, columns: Vec<String> },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SortColumn {
+    pub name: String,
+    pub ascending: bool,  // true for asc, false for desc
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -152,6 +165,11 @@ pub enum BinaryOp {
     GreaterThanEqual,
     And,
     Or,
+    
+    // Set operations on tables
+    Union,      // + when used on tables
+    Minus,      // - when used on tables (set difference)
+    Intersect,  // & when used on tables
 }
 
 #[derive(Debug, Clone, PartialEq)]

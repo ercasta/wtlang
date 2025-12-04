@@ -77,5 +77,6 @@
     - **Architecture Achieved**: Clean three-layer separation (AST → IR → Code Generation) as designed
     - **LSP Integration**: Pending - next step is to update LSP to use IR for analysis, hover, and completion
     - **Benefits Realized**: Platform-independent IR enables future multi-backend support, better type information available for tooling
+20. (TODO) File "doc/builtin_query_language.md" explains simple query operations, and "doc/keys_and_refs.md" explains references and lookup operations. Analyzed the current documentation and code implementation and create a documentation file with all the steps needed to implement these features and related code generation.
 
 

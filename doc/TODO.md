@@ -47,4 +47,10 @@
     - **Implementation Plan**: 6-week phased approach - refactor current generator (week 1-2), implement template system (week 3-4), external template support (week 5), documentation (week 6)
     - **Benefits**: User-editable templates without recompiling, multi-backend support (Streamlit, React, Jupyter), better maintainability, <5% performance overhead
     - **Document includes**: Detailed code examples, template samples, migration strategy, security considerations, testing approach, and example customizations
+18. (Done) doc/codegen_refactoring_desing.md details various possible approaches for targeting multiple platforms. The IR strategy might seem overengineered for a simple translation, but we have to consider multiple platforms might have differences that are better addressed by performing transformations on the IR. The idea of using embedded templates is good though - they can be used as a final step for the generation. Also we have to consider the impact on other tools such as the LSP and, in future, a debugger. **Update**: Updated doc/codegen_refactoring_design.md to include comprehensive analysis of IR benefits for tooling ecosystem. Document now includes:
+    - **IR Benefits for LSP**: Symbol extraction, type inference, semantic understanding, cross-backend validation, refactoring support, and code navigation
+    - **IR Benefits for Debugger**: Source-to-target mapping, breakpoint translation, watch expressions, runtime validation, and time-travel debugging
+    - **IR Advantages**: Platform normalization, optimization opportunities, static analysis, incremental compilation, and better testing
+    - **Recommended Architecture**: Three-layer hybrid (AST → IR → Templates) with IR serving as optimization and analysis layer while templates handle final rendering
+    - **Implementation Strategy**: 10-week phased approach with clear milestones and deliverables for each tool integration  
 

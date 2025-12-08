@@ -290,6 +290,22 @@ impl CodeGenerator {
                     BinOp::Ge => ">=",
                     BinOp::And => "and",
                     BinOp::Or => "or",
+                    BinOp::Union => {
+                        // Set union - use pd.concat
+                        return Ok(format!("pd.concat([{}, {}], ignore_index=True).drop_duplicates()",
+                            left_code, right_code));
+                    }
+                    BinOp::SetMinus => {
+                        // Set difference
+                        self.key_counter += 1;
+                        let temp_var = format!("_diff_{}", self.key_counter);
+                        return Ok(format!("({} := {}.merge({}, how='left', indicator=True))[{}['_merge'] == 'left_only'].drop('_merge', axis=1)",
+                            temp_var, left_code, right_code, temp_var));
+                    }
+                    BinOp::Intersect => {
+                        // Set intersection
+                        return Ok(format!("{}.merge({}, how='inner')", left_code, right_code));
+                    }
                 };
                 Ok(format!("({} {} {})", left_code, op_str, right_code))
             }
@@ -338,6 +354,96 @@ impl CodeGenerator {
                 let params_str = params.join(", ");
                 let body_code = self.generate_ir_expr(body)?;
                 Ok(format!("lambda {}: {}", params_str, body_code))
+            }
+            
+            IRExpr::Where { table, condition, .. } => {
+                let table_code = self.generate_ir_expr(table)?;
+                let condition_code = self.generate_where_condition(condition)?;
+                Ok(format!("{}.query({})", table_code, condition_code))
+            }
+            
+            IRExpr::SortBy { table, columns, .. } => {
+                let table_code = self.generate_ir_expr(table)?;
+                
+                if columns.is_empty() {
+                    return Ok(table_code);
+                }
+                
+                if columns.len() == 1 {
+                    let col = &columns[0];
+                    Ok(format!("{}.sort_values(by='{}', ascending={})",
+                        table_code, col.column, col.ascending))
+                } else {
+                    let col_names: Vec<String> = columns.iter()
+                        .map(|c| format!("'{}'", c.column))
+                        .collect();
+                    let ascending: Vec<String> = columns.iter()
+                        .map(|c| c.ascending.to_string())
+                        .collect();
+                    
+                    Ok(format!("{}.sort_values(by=[{}], ascending=[{}])",
+                        table_code,
+                        col_names.join(", "),
+                        ascending.join(", ")))
+                }
+            }
+            
+            IRExpr::ColumnSelect { table, columns, .. } => {
+                let table_code = self.generate_ir_expr(table)?;
+                
+                if columns.is_empty() {
+                    return Ok(table_code);
+                }
+                
+                let cols = columns.iter()
+                    .map(|c| format!("'{}'", c))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                
+                Ok(format!("{}[[{}]]", table_code, cols))
+            }
+            
+            IRExpr::Union { left, right, .. } => {
+                let left_code = self.generate_ir_expr(left)?;
+                let right_code = self.generate_ir_expr(right)?;
+                
+                Ok(format!("pd.concat([{}, {}], ignore_index=True).drop_duplicates()",
+                    left_code, right_code))
+            }
+            
+            IRExpr::Minus { left, right, .. } => {
+                let left_code = self.generate_ir_expr(left)?;
+                let right_code = self.generate_ir_expr(right)?;
+                
+                // Set difference using merge with indicator
+                self.key_counter += 1;
+                let temp_var = format!("_diff_{}", self.key_counter);
+                
+                // We need to generate multiple statements, so return a temp variable
+                Ok(format!("({} := {}.merge({}, how='left', indicator=True))[{}['_merge'] == 'left_only'].drop('_merge', axis=1)",
+                    temp_var, left_code, right_code, temp_var))
+            }
+            
+            IRExpr::Intersect { left, right, .. } => {
+                let left_code = self.generate_ir_expr(left)?;
+                let right_code = self.generate_ir_expr(right)?;
+                
+                Ok(format!("{}.merge({}, how='inner')", left_code, right_code))
+            }
+            
+            IRExpr::RefNavigation { object, field, target_table, .. } => {
+                let object_code = self.generate_ir_expr(object)?;
+                
+                // Generate lookup code - merge with target table
+                // Assume target table is loaded as a variable
+                let target_var = target_table.to_lowercase();
+                
+                // Get key field of target table (for now, assume it's 'id')
+                let target_key = self.get_table_key(target_table)
+                    .unwrap_or_else(|_| "id".to_string());
+                
+                Ok(format!("{}.merge({}, left_on='{}', right_on='{}', how='left')",
+                    object_code, target_var, field, target_key))
             }
             
             IRExpr::TableConstructor { .. } |
@@ -424,6 +530,19 @@ impl CodeGenerator {
                     BinaryOp::GreaterThanEqual => ">=",
                     BinaryOp::And => "and",
                     BinaryOp::Or => "or",
+                    BinaryOp::Union => {
+                        return Ok(format!("pd.concat([{}, {}], ignore_index=True).drop_duplicates()",
+                            left_code, right_code));
+                    }
+                    BinaryOp::Minus => {
+                        self.key_counter += 1;
+                        let temp_var = format!("_diff_{}", self.key_counter);
+                        return Ok(format!("({} := {}.merge({}, how='left', indicator=True))[{}['_merge'] == 'left_only'].drop('_merge', axis=1)",
+                            temp_var, left_code, right_code, temp_var));
+                    }
+                    BinaryOp::Intersect => {
+                        return Ok(format!("{}.merge({}, how='inner')", left_code, right_code));
+                    }
                 };
                 Ok(format!("({} {} {})", left_code, op_str, right_code))
             },
@@ -472,6 +591,50 @@ impl CodeGenerator {
             Expr::ArrayLiteral(_) => {
                 // Array literals for filters are handled specially in show/show_editable
                 Err("Array literals must be handled in context (e.g., for filters)".to_string())
+            },
+            Expr::Where { table, condition } => {
+                let table_code = self.generate_expr(table)?;
+                let condition_code = self.generate_where_condition_ast(condition)?;
+                Ok(format!("{}.query({})", table_code, condition_code))
+            },
+            Expr::SortBy { table, columns } => {
+                let table_code = self.generate_expr(table)?;
+                
+                if columns.is_empty() {
+                    return Ok(table_code);
+                }
+                
+                if columns.len() == 1 {
+                    let col = &columns[0];
+                    Ok(format!("{}.sort_values(by='{}', ascending={})",
+                        table_code, col.name, col.ascending))
+                } else {
+                    let col_names: Vec<String> = columns.iter()
+                        .map(|c| format!("'{}'", c.name))
+                        .collect();
+                    let ascending: Vec<String> = columns.iter()
+                        .map(|c| c.ascending.to_string())
+                        .collect();
+                    
+                    Ok(format!("{}.sort_values(by=[{}], ascending=[{}])",
+                        table_code,
+                        col_names.join(", "),
+                        ascending.join(", ")))
+                }
+            },
+            Expr::ColumnSelect { table, columns } => {
+                let table_code = self.generate_expr(table)?;
+                
+                if columns.is_empty() {
+                    return Ok(table_code);
+                }
+                
+                let cols = columns.iter()
+                    .map(|c| format!("'{}'", c))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                
+                Ok(format!("{}[[{}]]", table_code, cols))
             },
             _ => Err(format!("Unsupported expression: {:?}", expr)),
         }
@@ -685,5 +848,101 @@ impl CodeGenerator {
             if is_editable { "True" } else { "False" },
             key
         ))
+    }
+    
+    fn generate_where_condition(&mut self, condition: &IRExpr) -> Result<String, String> {
+        // Convert IR condition to pandas query string
+        match condition {
+            IRExpr::BinaryOp { op, left, right, .. } => {
+                let left_str = self.generate_where_condition(left)?;
+                let right_str = self.generate_where_condition(right)?;
+                
+                let op_str = match op {
+                    BinOp::Eq => "==",
+                    BinOp::Ne => "!=",
+                    BinOp::Lt => "<",
+                    BinOp::Le => "<=",
+                    BinOp::Gt => ">",
+                    BinOp::Ge => ">=",
+                    BinOp::And => "and",
+                    BinOp::Or => "or",
+                    _ => return Err("Invalid operator in where clause".to_string()),
+                };
+                
+                Ok(format!("({} {} {})", left_str, op_str, right_str))
+            }
+            
+            IRExpr::FieldAccess { field, .. } => {
+                // In query string, just use column name
+                Ok(field.clone())
+            }
+            
+            IRExpr::Variable { name, .. } => {
+                // Variable reference in where clause
+                Ok(name.clone())
+            }
+            
+            IRExpr::Literal { value, .. } => {
+                match value {
+                    Literal::Int(n) => Ok(n.to_string()),
+                    Literal::Float(f) => Ok(f.to_string()),
+                    Literal::String(s) => Ok(format!("'{}'", self.escape_string(s))),
+                    Literal::Bool(b) => Ok(if *b { "True" } else { "False" }.to_string()),
+                }
+            }
+            
+            _ => Err("Unsupported expression in where clause".to_string()),
+        }
+    }
+    
+    fn get_table_key(&self, table_name: &str) -> Result<String, String> {
+        // Look up key field from table schema
+        if let Some(schema) = self.table_schemas.get(table_name) {
+            if let Some(key_field) = schema.get_key_field() {
+                return Ok(key_field.name.clone());
+            }
+        }
+        Err(format!("Table {} has no key field", table_name))
+    }
+    
+    fn generate_where_condition_ast(&mut self, condition: &ast::Expr) -> Result<String, String> {
+        // Convert AST condition to pandas query string
+        match condition {
+            ast::Expr::BinaryOp { op, left, right } => {
+                let left_str = self.generate_where_condition_ast(left)?;
+                let right_str = self.generate_where_condition_ast(right)?;
+                
+                let op_str = match op {
+                    ast::BinaryOp::Equal => "==",
+                    ast::BinaryOp::NotEqual => "!=",
+                    ast::BinaryOp::LessThan => "<",
+                    ast::BinaryOp::LessThanEqual => "<=",
+                    ast::BinaryOp::GreaterThan => ">",
+                    ast::BinaryOp::GreaterThanEqual => ">=",
+                    ast::BinaryOp::And => "and",
+                    ast::BinaryOp::Or => "or",
+                    _ => return Err("Invalid operator in where clause".to_string()),
+                };
+                
+                Ok(format!("({} {} {})", left_str, op_str, right_str))
+            }
+            
+            ast::Expr::FieldAccess { field, .. } => {
+                // In query string, just use column name
+                Ok(field.clone())
+            }
+            
+            ast::Expr::Identifier(name) => {
+                // Variable reference in where clause
+                Ok(name.clone())
+            }
+            
+            ast::Expr::IntLiteral(n) => Ok(n.to_string()),
+            ast::Expr::FloatLiteral(f) => Ok(f.to_string()),
+            ast::Expr::StringLiteral(s) => Ok(format!("'{}'", self.escape_string(s))),
+            ast::Expr::BoolLiteral(b) => Ok(if *b { "True" } else { "False" }.to_string()),
+            
+            _ => Err("Unsupported expression in where clause".to_string()),
+        }
     }
 }

@@ -320,6 +320,7 @@ impl LanguageServer for WTLangServer {
                 Type::Bool => "bool",
                 Type::Table(name) => &format!("table({})", name),
                 Type::Filter => "filter",
+                Type::Ref(table_name) => &format!("ref {}", table_name),
             };
             
             let kind_str = match symbol.kind {

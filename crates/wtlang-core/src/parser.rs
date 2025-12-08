@@ -101,6 +101,11 @@ impl Parser {
             self.expect(TokenType::RightBracket)?;
         }
         
+        // Consume optional trailing comma
+        if self.check(&TokenType::Comma) {
+            self.advance();
+        }
+        
         Ok(Field { name, field_type, constraints })
     }
 
@@ -135,19 +140,36 @@ impl Parser {
         let mut constraints = Vec::new();
         
         loop {
-            let ident = self.expect_identifier()?;
-            let constraint = match ident.as_str() {
-                "unique" => Constraint::Unique,
-                "non_null" => Constraint::NonNull,
-                "key" => Constraint::Key,
+            // Check for keyword constraints first
+            let constraint = match &self.peek().token_type {
+                TokenType::Key => {
+                    self.advance();
+                    Constraint::Key
+                }
+                TokenType::Identifier(ident) => {
+                    let ident_str = ident.clone();
+                    self.advance();
+                    match ident_str.as_str() {
+                        "unique" => Constraint::Unique,
+                        "non_null" => Constraint::NonNull,
+                        _ => {
+                            self.add_error(
+                                ErrorCode::E2012,
+                                format!("Unknown constraint: {}", ident_str)
+                            );
+                            return Err(());
+                        }
+                    }
+                }
                 _ => {
                     self.add_error(
                         ErrorCode::E2012,
-                        format!("Unknown constraint: {}", ident)
+                        format!("Expected constraint, got {:?}", self.peek().token_type)
                     );
                     return Err(());
                 }
             };
+            
             constraints.push(constraint);
             
             if !self.check(&TokenType::Comma) {

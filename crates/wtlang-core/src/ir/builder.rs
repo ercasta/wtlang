@@ -102,6 +102,9 @@ impl IRBuilder {
                     ast::Constraint::NonNull => {
                         schema.constraints.push(Constraint::NonNull(field.name.clone()));
                     }
+                    ast::Constraint::Key => {
+                        schema.constraints.push(Constraint::PrimaryKey(field.name.clone()));
+                    }
                     _ => {
                         // Validate and References are not yet fully supported
                     }
@@ -367,14 +370,45 @@ impl IRBuilder {
             ast::Expr::BinaryOp { op, left, right } => {
                 let left_ir = self.lower_expr(left)?;
                 let right_ir = self.lower_expr(right)?;
-                let ty = self.infer_binary_op_type(op, left_ir.get_type(), right_ir.get_type())?;
                 
-                Ok(IRExpr::BinaryOp {
-                    op: BinOp::from(op),
-                    left: Box::new(left_ir),
-                    right: Box::new(right_ir),
-                    ty,
-                })
+                // Check if this is a set operation on tables
+                match op {
+                    ast::BinaryOp::Union => {
+                        let ty = left_ir.get_type().clone();
+                        Ok(IRExpr::Union {
+                            left: Box::new(left_ir),
+                            right: Box::new(right_ir),
+                            ty,
+                        })
+                    }
+                    ast::BinaryOp::Minus if left_ir.get_type().is_table() => {
+                        // Table set difference
+                        let ty = left_ir.get_type().clone();
+                        Ok(IRExpr::Minus {
+                            left: Box::new(left_ir),
+                            right: Box::new(right_ir),
+                            ty,
+                        })
+                    }
+                    ast::BinaryOp::Intersect => {
+                        let ty = left_ir.get_type().clone();
+                        Ok(IRExpr::Intersect {
+                            left: Box::new(left_ir),
+                            right: Box::new(right_ir),
+                            ty,
+                        })
+                    }
+                    _ => {
+                        // Regular binary operations
+                        let ty = self.infer_binary_op_type(op, left_ir.get_type(), right_ir.get_type())?;
+                        Ok(IRExpr::BinaryOp {
+                            op: BinOp::from(op),
+                            left: Box::new(left_ir),
+                            right: Box::new(right_ir),
+                            ty,
+                        })
+                    }
+                }
             }
             
             ast::Expr::UnaryOp { op, operand } => {
@@ -390,13 +424,25 @@ impl IRBuilder {
             
             ast::Expr::FieldAccess { object, field } => {
                 let object_ir = self.lower_expr(object)?;
-                let ty = self.infer_field_access_type(object_ir.get_type(), field)?;
                 
-                Ok(IRExpr::FieldAccess {
-                    object: Box::new(object_ir),
-                    field: field.clone(),
-                    ty,
-                })
+                // Check if this is a reference navigation
+                if let Some(ref_info) = self.check_ref_field(object_ir.get_type(), field) {
+                    // This is a reference field - create RefNavigation node
+                    Ok(IRExpr::RefNavigation {
+                        object: Box::new(object_ir),
+                        field: field.clone(),
+                        target_table: ref_info.target_table,
+                        ty: Type::Table(ref_info.target_schema),
+                    })
+                } else {
+                    // Regular field access
+                    let ty = self.infer_field_access_type(object_ir.get_type(), field)?;
+                    Ok(IRExpr::FieldAccess {
+                        object: Box::new(object_ir),
+                        field: field.clone(),
+                        ty,
+                    })
+                }
             }
             
             ast::Expr::Index { object, index } => {
@@ -466,6 +512,47 @@ impl IRBuilder {
                 Ok(IRExpr::Literal {
                     value: Literal::String(filter_def.column.clone()),
                     ty: Type::Error,
+                })
+            }
+            
+            ast::Expr::Where { table, condition } => {
+                let table_ir = self.lower_expr(table)?;
+                let condition_ir = self.lower_expr(condition)?;
+                let ty = table_ir.get_type().clone();
+                
+                Ok(IRExpr::Where {
+                    table: Box::new(table_ir),
+                    condition: Box::new(condition_ir),
+                    ty,
+                })
+            }
+            
+            ast::Expr::SortBy { table, columns } => {
+                let table_ir = self.lower_expr(table)?;
+                let ty = table_ir.get_type().clone();
+                
+                let sort_specs: Vec<SortSpec> = columns.iter()
+                    .map(|col| SortSpec {
+                        column: col.name.clone(),
+                        ascending: col.ascending,
+                    })
+                    .collect();
+                
+                Ok(IRExpr::SortBy {
+                    table: Box::new(table_ir),
+                    columns: sort_specs,
+                    ty,
+                })
+            }
+            
+            ast::Expr::ColumnSelect { table, columns } => {
+                let table_ir = self.lower_expr(table)?;
+                let ty = table_ir.get_type().clone();
+                
+                Ok(IRExpr::ColumnSelect {
+                    table: Box::new(table_ir),
+                    columns: columns.clone(),
+                    ty,
                 })
             }
         }
@@ -578,6 +665,10 @@ impl IRBuilder {
             ast::BinaryOp::And | ast::BinaryOp::Or => {
                 Ok(Type::Bool)
             }
+            ast::BinaryOp::Union | ast::BinaryOp::Minus | ast::BinaryOp::Intersect => {
+                // Set operations return the same table type as the left operand
+                Ok(left_ty.clone())
+            }
         }
     }
     
@@ -591,6 +682,14 @@ impl IRBuilder {
                     FieldType::Bool => Type::Bool,
                     FieldType::Date => Type::Date,
                     FieldType::Currency => Type::Currency,
+                    FieldType::Ref { table_name } => {
+                        // Look up the referenced table schema
+                        if let Some(target_symbol) = self.symbol_table.lookup(table_name) {
+                            self.ast_type_to_ir_type(&target_symbol.symbol_type)
+                        } else {
+                            Type::Error
+                        }
+                    }
                 })
             } else {
                 Err(format!("Field '{}' not found in table", field))
@@ -604,6 +703,31 @@ impl IRBuilder {
         // Simplified - would need to handle array types properly
         Ok(Type::Error)
     }
+    
+    fn check_ref_field(&self, object_ty: &Type, field: &str) -> Option<RefInfo> {
+        // Check if the field is a reference type in the table schema
+        if let Some(schema) = object_ty.as_table() {
+            if let Some(field_def) = schema.fields.iter().find(|f| f.name == field) {
+                if let FieldType::Ref { table_name } = &field_def.ty {
+                    // Look up the target table schema
+                    if let Some(target_symbol) = self.symbol_table.lookup(table_name) {
+                        if let Type::Table(target_schema) = self.ast_type_to_ir_type(&target_symbol.symbol_type) {
+                            return Some(RefInfo {
+                                target_table: table_name.clone(),
+                                target_schema,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+struct RefInfo {
+    target_table: String,
+    target_schema: TableSchema,
 }
 
 impl Default for IRBuilder {

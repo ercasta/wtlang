@@ -78,7 +78,7 @@
     - **LSP Integration**: Pending - next step is to update LSP to use IR for analysis, hover, and completion
     - **Benefits Realized**: Platform-independent IR enables future multi-backend support, better type information available for tooling
 20. (Done) File "doc/builtin_query_language.md" explains simple query operations, and "doc/keys_and_refs.md" explains references and lookup operations. Analyzed the current documentation and code implementation and create a documentation file with all the steps needed to implement these features and related code generation.
-21. (Partially Complete) Implement the changes detailed in "doc/query_language_implementation_plan.md". **Update**: Foundation work completed for query language features:
+21. (In Progress) Implement the changes detailed in "doc/query_language_implementation_plan.md". **Update**: Foundation work completed for query language features:
     - **Phase 1 - Lexer & AST Extensions (✅ Complete)**:
       - Added new keywords: `where`, `by`, `asc`, `desc`, `key`, `ref` to TokenType enum
       - Extended AST Type enum with `Ref(String)` for reference types
@@ -104,16 +104,35 @@
       - Extended BinOp enum with `Union`, `SetMinus`, `Intersect` for set operations
       - Updated `get_type()` to handle all new expression variants
       - Updated From<ast::BinaryOp> to convert set operation types
+    - **Phase 2 - IR Builder (✅ Complete - December 8, 2025)**:
+      - Implemented lowering for `Where`, `SortBy`, `ColumnSelect` expressions
+      - Added special handling for set operations (Union, Minus, Intersect) in binary op lowering
+      - Implemented reference navigation detection in field access
+      - Added `check_ref_field()` helper to identify reference types
+      - Updated `infer_field_access_type()` to handle Ref field types
+      - Updated `infer_binary_op_type()` to handle set operations
+      - Added `Key` constraint handling (maps to `PrimaryKey` in IR)
+      - Fixed LSP type display to handle `Ref` types
+    - **Phase 4 - Code Generation (✅ Complete - December 8, 2025)**:
+      - Added pandas code generation for `Where` expressions using `.query()`
+      - Added pandas code generation for `SortBy` expressions using `.sort_values()`
+      - Added pandas code generation for `ColumnSelect` expressions using column indexing
+      - Added pandas code generation for set operations:
+        - Union: `pd.concat([left, right], ignore_index=True).drop_duplicates()`
+        - Minus: merge with indicator for set difference
+        - Intersect: `merge(how='inner')`
+      - Added pandas code generation for `RefNavigation` using `.merge()` for lookups
+      - Added `generate_where_condition()` and `generate_where_condition_ast()` helpers
+      - Added `get_table_key()` helper to retrieve primary key fields
+      - Handled both IR-based and AST-based code generation paths
     - **Remaining Work** (Not Yet Implemented):
-      - Phase 2: IR Builder lowering for new expressions (AST→IR conversion)
       - Phase 3: Symbol Table extensions for key/ref tracking
       - Phase 3: Semantic Analysis validation for keys and references
-      - Phase 4: Code Generation for pandas (where/sort/select/union/minus/intersect/refs)
-      - Phase 5: LSP updates (error codes, hover, completions)
+      - Phase 5: LSP updates (error codes, hover, completions for new features)
       - Phase 6: Documentation updates and examples
       - Phase 7: Comprehensive error handling
       - Phase 8: Testing suite
-    - **Current Status**: Syntax parsing works, but IR builder and code generation need implementation before features are usable. The foundation is solid and follows the architecture laid out in the implementation plan.
-    - **Next Steps**: Complete IR builder lowering (Phase 2 remaining), then proceed through Phases 3-8 as detailed in `doc/query_language_implementation_plan.md`
+    - **Current Status**: Syntax parsing works, IR builder handles new expressions, and code generation produces pandas code for all query operations. The foundation is solid but semantic validation and LSP support need implementation before features are fully production-ready.
+    - **Next Steps**: Proceed through remaining phases as detailed in `doc/query_language_implementation_plan.md`
 
 

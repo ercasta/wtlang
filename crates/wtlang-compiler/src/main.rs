@@ -1,6 +1,7 @@
-mod codegen;
+mod codegen_legacy;
 
 use wtlang_core::{Lexer, Parser, SemanticAnalyzer};
+use codegen_legacy as codegen;
 use clap::{Parser as ClapParser, Subcommand};
 use std::fs;
 use std::path::PathBuf;

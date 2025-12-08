@@ -1,0 +1,29 @@
+// Query Language Features Test
+
+table Users {
+    id: int [key],
+    name: string,
+    age: int,
+    city: string
+}
+
+table Orders {
+    order_id: int [key],
+    user_id: int,
+    product: string,
+    amount: currency
+}
+
+page UserAnalysis {
+    // Load data
+    users: Users = load_csv("data/users.csv")
+    orders: Orders = load_csv("data/orders.csv")
+    
+    // Test basic display
+    show(users)
+    show(orders)
+    
+    // Test column selection
+    user_names: Users = users[name, city]
+    show(user_names)
+}

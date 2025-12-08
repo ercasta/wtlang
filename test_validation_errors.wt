@@ -1,0 +1,30 @@
+// Test validation errors
+
+// Error: Multiple keys
+table BadTable1 {
+    id1: int [key],
+    id2: int [key],
+    name: string
+}
+
+// Error: Reference to undefined table
+table BadTable2 {
+    id: int [key],
+    ref_field: ref UndefinedTable
+}
+
+// Error: Reference to table without key
+table NoKeyTable {
+    id: int,
+    name: string
+}
+
+table BadTable3 {
+    id: int [key],
+    ref_field: ref NoKeyTable
+}
+
+page Test {
+    let data = load_csv("data.csv", BadTable1)
+    show(data)
+}

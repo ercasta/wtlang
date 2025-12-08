@@ -146,6 +146,13 @@ pub struct SymbolTable {
     
     /// Current scope stack during analysis
     current_scopes: Vec<Arc<Scope>>,
+    
+    /// Map of table name to key field name
+    table_keys: HashMap<String, String>,
+    
+    /// Map of table name to fields that reference other tables
+    /// Each entry is (field_name, target_table)
+    table_refs: HashMap<String, Vec<(String, String)>>,
 }
 
 impl SymbolTable {
@@ -153,6 +160,8 @@ impl SymbolTable {
         SymbolTable {
             global: Arc::new(Scope::new(None, ScopeKind::Global)),
             current_scopes: vec![],
+            table_keys: HashMap::new(),
+            table_refs: HashMap::new(),
         }
     }
     
@@ -221,6 +230,39 @@ impl SymbolTable {
         }
         
         Err(SymbolError::UndefinedVariable { name: name.to_string() })
+    }
+    
+    /// Register a key field for a table
+    pub fn register_key(&mut self, table_name: String, key_field: String) {
+        self.table_keys.insert(table_name, key_field);
+    }
+    
+    /// Register a reference field for a table
+    pub fn register_ref(&mut self, table_name: String, field_name: String, target_table: String) {
+        self.table_refs
+            .entry(table_name)
+            .or_insert_with(Vec::new)
+            .push((field_name, target_table));
+    }
+    
+    /// Get the key field for a table
+    pub fn get_key_field(&self, table_name: &str) -> Option<&String> {
+        self.table_keys.get(table_name)
+    }
+    
+    /// Get the target table for a reference field
+    pub fn get_ref_target(&self, table_name: &str, field_name: &str) -> Option<&String> {
+        self.table_refs.get(table_name)?
+            .iter()
+            .find(|(f, _)| f == field_name)
+            .map(|(_, t)| t)
+    }
+    
+    /// Check if a table exists in the symbol table
+    pub fn has_table(&self, table_name: &str) -> bool {
+        self.lookup(table_name)
+            .map(|s| s.kind == SymbolKind::Table)
+            .unwrap_or(false)
     }
 }
 

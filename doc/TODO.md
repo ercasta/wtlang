@@ -125,14 +125,27 @@
       - Added `generate_where_condition()` and `generate_where_condition_ast()` helpers
       - Added `get_table_key()` helper to retrieve primary key fields
       - Handled both IR-based and AST-based code generation paths
+    - **Phase 3 - Symbol Table & Semantic Analysis (✅ Complete - December 8, 2025)**:
+      - Extended SymbolTable with `table_keys` HashMap to track key fields
+      - Extended SymbolTable with `table_refs` HashMap to track reference fields
+      - Added helper methods: `register_key()`, `register_ref()`, `get_key_field()`, `get_ref_target()`, `has_table()`
+      - Added new error codes: E3019 (Multiple key fields), E3020 (Undefined reference target), E3021 (Reference to table without key)
+      - Extended SemanticError enum with `MultipleKeyFields`, `UndefinedReferenceTarget`, `ReferenceToTableWithoutKey`
+      - Enhanced `define_table()` method to validate key constraints and reference types
+      - Validates at most one key field per table
+      - Validates reference targets exist and have key fields
+      - Registers keys and references in symbol table for later use
+    - **Parser Bug Fix (December 8, 2025)**:
+      - Fixed critical bug in `check()` method that used `std::mem::discriminant` causing all identifiers to match
+      - Added `check_identifier_value()` helper to properly check specific identifier values
+      - Updated `parse_where_sort()` to use new helper for "sort" identifier detection
+      - This bug was preventing proper parsing of function calls like `show()`
     - **Remaining Work** (Not Yet Implemented):
-      - Phase 3: Symbol Table extensions for key/ref tracking
-      - Phase 3: Semantic Analysis validation for keys and references
       - Phase 5: LSP updates (error codes, hover, completions for new features)
       - Phase 6: Documentation updates and examples
       - Phase 7: Comprehensive error handling
       - Phase 8: Testing suite
-    - **Current Status**: Syntax parsing works, IR builder handles new expressions, and code generation produces pandas code for all query operations. The foundation is solid but semantic validation and LSP support need implementation before features are fully production-ready.
+    - **Current Status**: Syntax parsing works, IR builder handles new expressions, code generation produces pandas code for all query operations, and semantic validation enforces key/reference constraints. The foundation is solid but LSP support, documentation, and comprehensive testing need implementation before features are fully production-ready.
     - **Next Steps**: Proceed through remaining phases as detailed in `doc/query_language_implementation_plan.md`
 
 

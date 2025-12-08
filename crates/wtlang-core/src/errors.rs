@@ -49,6 +49,9 @@ pub enum ErrorCode {
     E3016, // Return outside function
     E3017, // Missing return statement
     E3018, // Unreachable code after return
+    E3019, // Multiple key fields in table
+    E3020, // Reference to undefined table
+    E3021, // Reference to table without key field
     
     // Table/Data errors (E4xxx)
     E4001, // Table type mismatch with CSV
@@ -111,6 +114,9 @@ impl ErrorCode {
             ErrorCode::E3016 => "E3016",
             ErrorCode::E3017 => "E3017",
             ErrorCode::E3018 => "E3018",
+            ErrorCode::E3019 => "E3019",
+            ErrorCode::E3020 => "E3020",
+            ErrorCode::E3021 => "E3021",
             
             // Table/Data errors
             ErrorCode::E4001 => "E4001",
@@ -173,6 +179,9 @@ impl ErrorCode {
             ErrorCode::E3016 => "Return statement outside function",
             ErrorCode::E3017 => "Missing return statement",
             ErrorCode::E3018 => "Unreachable code after return",
+            ErrorCode::E3019 => "Multiple key fields in table",
+            ErrorCode::E3020 => "Reference to undefined table",
+            ErrorCode::E3021 => "Reference to table without key field",
             
             // Table/Data errors
             ErrorCode::E4001 => "Table structure mismatch with CSV",
@@ -203,6 +212,9 @@ impl ErrorCode {
             ErrorCode::E3004 => Some("Use a different name or remove one of the definitions"),
             ErrorCode::E3007 => Some("Ensure the value type matches the variable's declared type"),
             ErrorCode::E3011 => Some("Initialize the variable before using it, or use conditional initialization"),
+            ErrorCode::E3019 => Some("Only one field can be marked as 'key' in a table definition"),
+            ErrorCode::E3020 => Some("Define the referenced table before using it in a 'ref' type"),
+            ErrorCode::E3021 => Some("Add a 'key' constraint to the referenced table"),
             _ => None,
         }
     }

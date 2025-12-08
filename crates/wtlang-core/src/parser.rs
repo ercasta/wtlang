@@ -431,7 +431,7 @@ impl Parser {
                     table: Box::new(expr),
                     condition: Box::new(condition),
                 };
-            } else if self.check(&TokenType::Identifier("sort".to_string())) {
+            } else if self.check_identifier_value("sort") {
                 // Parse: table sort by col1 [asc|desc], col2 [asc|desc], ...
                 self.advance();
                 self.expect(TokenType::By)?;
@@ -820,6 +820,13 @@ impl Parser {
             return false;
         }
         matches!(self.peek().token_type, TokenType::Identifier(_))
+    }
+    
+    fn check_identifier_value(&self, value: &str) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+        matches!(&self.peek().token_type, TokenType::Identifier(id) if id == value)
     }
 
     fn expect(&mut self, token_type: TokenType) -> Result<(), ()> {

@@ -27,6 +27,20 @@ pub enum SemanticError {
     MissingTypeOrInitializer {
         name: String,
     },
+    MultipleKeyFields {
+        table_name: String,
+        key_fields: Vec<String>,
+    },
+    UndefinedReferenceTarget {
+        field_name: String,
+        table_name: String,
+        target_table: String,
+    },
+    ReferenceToTableWithoutKey {
+        field_name: String,
+        table_name: String,
+        target_table: String,
+    },
 }
 
 impl std::fmt::Display for SemanticError {
@@ -46,6 +60,18 @@ impl std::fmt::Display for SemanticError {
             }
             SemanticError::MissingTypeOrInitializer { name } => {
                 write!(f, "Variable '{}' must have either a type annotation or initializer", name)
+            }
+            SemanticError::MultipleKeyFields { table_name, key_fields } => {
+                write!(f, "Table '{}' has multiple key fields: {}. Only one key is allowed.",
+                    table_name, key_fields.join(", "))
+            }
+            SemanticError::UndefinedReferenceTarget { field_name, table_name, target_table } => {
+                write!(f, "Field '{}' in table '{}' references undefined table '{}'",
+                    field_name, table_name, target_table)
+            }
+            SemanticError::ReferenceToTableWithoutKey { field_name, table_name, target_table } => {
+                write!(f, "Field '{}' in table '{}' cannot reference table '{}' because it has no key field",
+                    field_name, table_name, target_table)
             }
         }
     }
@@ -106,6 +132,7 @@ impl SemanticAnalyzer {
     }
     
     fn define_table(&mut self, table: &TableDef) {
+        // First, define the table in the symbol table
         if let Err(_e) = self.symbols.define(
             table.name.clone(),
             Symbol {
@@ -119,6 +146,63 @@ impl SemanticAnalyzer {
             self.errors.push(SemanticError::Redefinition {
                 name: table.name.clone(),
             });
+            return;
+        }
+        
+        // Find key fields
+        let mut key_fields = Vec::new();
+        for field in &table.fields {
+            for constraint in &field.constraints {
+                if matches!(constraint, Constraint::Key) {
+                    key_fields.push(field.name.clone());
+                }
+            }
+        }
+        
+        // Validate: at most one key field per table
+        if key_fields.len() > 1 {
+            self.errors.push(SemanticError::MultipleKeyFields {
+                table_name: table.name.clone(),
+                key_fields,
+            });
+            return;
+        }
+        
+        // Register key in symbol table
+        if let Some(key) = key_fields.first() {
+            self.symbols.register_key(table.name.clone(), key.clone());
+        }
+        
+        // Find and validate reference fields
+        for field in &table.fields {
+            if let Type::Ref(target_table) = &field.field_type {
+                // Check target table exists
+                if !self.symbols.has_table(target_table) {
+                    self.errors.push(SemanticError::UndefinedReferenceTarget {
+                        field_name: field.name.clone(),
+                        table_name: table.name.clone(),
+                        target_table: target_table.clone(),
+                    });
+                    continue;
+                }
+                
+                // Check target table has a key
+                if self.symbols.get_key_field(target_table).is_none() {
+                    self.errors.push(SemanticError::ReferenceToTableWithoutKey {
+                        field_name: field.name.clone(),
+                        table_name: table.name.clone(),
+                        target_table: target_table.clone(),
+                    });
+                    continue;
+                }
+                
+                // Register the reference
+                self.symbols.register_ref(
+                    table.name.clone(),
+                    field.name.clone(),
+                    target_table.clone(),
+                );
+            }
         }
     }
     

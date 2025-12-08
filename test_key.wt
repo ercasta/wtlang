@@ -1,0 +1,9 @@
+table Department {
+    id: int [key],
+    name: string
+}
+
+page Test {
+    let departments = load_csv("data/departments.csv", Department)
+    show(departments)
+}

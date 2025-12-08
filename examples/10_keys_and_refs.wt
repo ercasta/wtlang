@@ -1,0 +1,28 @@
+// Example demonstrating key constraints and reference types
+
+table Department {
+    id: int [key],
+    name: string,
+    budget: currency
+}
+
+table Employee {
+    emp_id: int [key],
+    name: string,
+    dept_ref: ref Department,
+    salary: currency
+}
+
+page DepartmentNavigator {
+    let departments = load_csv("data/departments.csv", Department)
+    show(departments)
+    
+    section "Employees" {
+        let employees = load_csv("data/employees.csv", Employee)
+        
+        // Reference navigation: access department through reference
+        let emp_with_dept = employees
+        
+        show(emp_with_dept)
+    }
+}

@@ -359,7 +359,7 @@ impl CodeGenerator {
             IRExpr::Where { table, condition, .. } => {
                 let table_code = self.generate_ir_expr(table)?;
                 let condition_code = self.generate_where_condition(condition)?;
-                Ok(format!("{}.query({})", table_code, condition_code))
+                Ok(format!("{}.query(\"{}\")", table_code, condition_code))
             }
             
             IRExpr::SortBy { table, columns, .. } => {
@@ -889,15 +889,14 @@ impl CodeGenerator {
             }
             
             IRExpr::FieldAccess { field, .. } => {
-                // In query string, column names need to be quoted if they contain spaces or special chars
-                // Use backticks for pandas query syntax
-                Ok(format!("`{}`", field))
+                // In query string, just use column name (no quotes needed inside query string)
+                Ok(field.clone())
             }
             
             IRExpr::Variable { name, .. } => {
                 // In a where clause, bare identifiers are column names
-                // Pandas query syntax requires column names to be quoted with backticks
-                Ok(format!("`{}`", name))
+                // Just use the name directly in the query string
+                Ok(name.clone())
             }
             
             IRExpr::Literal { value, .. } => {

@@ -878,7 +878,8 @@ impl CodeGenerator {
             }
             
             IRExpr::Variable { name, .. } => {
-                // Variable reference in where clause
+                // In a where clause, bare identifiers are column names
+                // not variable references. Pandas query syntax uses column names directly.
                 Ok(name.clone())
             }
             

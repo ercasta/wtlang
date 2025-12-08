@@ -87,6 +87,7 @@ Field ::= Identifier ":" Type Constraints?
 Constraints ::= "[" Constraint ("," Constraint)* "]"
 
 Constraint ::=
+    | "key"
     | "unique"
     | "non_null"
     | "validate" "(" Expr ")"
@@ -123,6 +124,31 @@ table Order {
     quantity: int [validate(x => x > 0)]
 }
 ```
+
+**Table with primary key:**
+```wtlang
+table Department {
+    code: string [key]  // Primary key constraint - only one per table
+    name: string
+    budget: currency
+}
+```
+
+**Table with reference type:**
+```wtlang
+table Employee {
+    emp_id: int [key]
+    name: string
+    department: ref Department  // Reference to Department table via key
+    salary: currency
+}
+```
+
+**Notes on keys and references:**
+- Only one field per table can have the `[key]` constraint
+- The `ref TableName` type creates a reference to another table
+- Referenced tables must have a key field
+- Reference navigation (e.g., `employees.department`) performs automatic lookups
 
 ---
 
@@ -603,6 +629,7 @@ show(employees, [filter("department", single), filter("position", multi)])
 | `table` | Table type (unspecified) | Used for generic table parameters |
 | `table<TypeName>` | Table of specific type | `table<User>`, `table<Product>` |
 | `filter` | Filter for table columns | `filter("column", single)` |
+| `ref TableName` | Reference to another table | `ref Department`, `ref Category` |
 
 ### Type Annotations
 
@@ -655,6 +682,165 @@ Type annotations can be used in:
 | `=>` | Lambda | `x => x + 1` | N/A |
 
 **Precedence:** Higher numbers bind tighter (7 = highest, 0 = lowest)
+
+---
+
+## Query Language Operations
+
+WTLang provides infix operators for querying and manipulating tables with a concise, SQL-like syntax.
+
+### WHERE Clause (Filtering)
+
+Filter table rows using the `where` keyword with infix notation.
+
+**Syntax:**
+```ebnf
+WhereExpr ::= Expr "where" Expr
+```
+
+**Examples:**
+```wtlang
+// Simple filter
+let adults = users where age >= 18
+
+// Complex conditions
+let premium_adults = users where (age >= 18 and subscription == "premium")
+
+// Multiple where clauses (AND logic)
+let result = users 
+  where age >= 18
+  where city == "NYC"
+
+// Can be chained with other operations
+let sorted_adults = users where age >= 18 sort by name asc
+```
+
+**Generated Code:** Uses pandas `.query()` method for efficient filtering.
+
+### SORT BY (Ordering)
+
+Sort tables by one or more columns with ascending (`asc`) or descending (`desc`) order.
+
+**Syntax:**
+```ebnf
+SortExpr ::= Expr "sort" "by" SortColumn ("," SortColumn)*
+SortColumn ::= Identifier ("asc" | "desc")?
+```
+
+**Examples:**
+```wtlang
+// Sort by single column (ascending by default)
+let by_name = users sort by name asc
+
+// Sort descending
+let by_age_desc = users sort by age desc
+
+// Multi-column sort
+let sorted = users sort by department asc, salary desc
+```
+
+**Generated Code:** Uses pandas `.sort_values()` with specified columns and order.
+
+### Column Selection
+
+Select specific columns from a table using bracket notation.
+
+**Syntax:**
+```ebnf
+ColumnSelectExpr ::= Expr "[" Identifier ("," Identifier)* "]"
+```
+
+**Examples:**
+```wtlang
+// Select two columns
+let names = users[name, email]
+
+// Select single column
+let ids = products[id]
+
+// Combine with filtering
+let it_names = (employees where department == "IT")[name, email]
+```
+
+**Generated Code:** Uses pandas column indexing with a list of column names.
+
+### Set Operations
+
+Perform union, difference, and intersection on tables with compatible schemas.
+
+**Syntax:**
+```ebnf
+SetUnion ::= Expr "+" Expr       // Union
+SetDiff  ::= Expr "-" Expr       // Difference  
+SetInter ::= Expr "&" Expr       // Intersection
+```
+
+**Examples:**
+```wtlang
+// Union: combine two tables, removing duplicates
+let all_special = seniors + minors
+
+// Difference: rows in first table but not in second
+let regular = all_users - premium_users
+
+// Intersection: rows that appear in both tables
+let active_premium = active_users & premium_users
+```
+
+**Generated Code:**
+- Union: `pd.concat([left, right], ignore_index=True).drop_duplicates()`
+- Difference: Uses merge with indicator for set difference
+- Intersection: `left.merge(right, how='inner')`
+
+### Reference Navigation
+
+Access referenced table data through reference-type fields.
+
+**Syntax:**
+```ebnf
+RefNavigation ::= Expr "." Identifier  // where field is ref type
+```
+
+**Examples:**
+```wtlang
+table Department {
+    code: string [key]
+    name: string
+}
+
+table Employee {
+    emp_id: int [key]
+    name: string
+    dept: ref Department
+}
+
+// Navigate from employees to their departments
+let depts = employees.dept  // Returns Department table rows
+
+// Filter using referenced field
+let it_employees = employees where dept.name == "IT"
+```
+
+**Generated Code:** Generates a pandas `.merge()` operation to perform the lookup/join.
+
+### Combining Query Operations
+
+All query operations can be freely combined:
+
+```wtlang
+// Complex query combining multiple operations
+let result = employees 
+  where salary > $50000
+  where dept.name == "Engineering"
+  sort by salary desc
+let final = result[name, salary, dept]
+show(final)
+
+// Set operations with filters
+let senior_engineers = (employees where dept.name == "Engineering" where age > 50)
+let junior_engineers = (employees where dept.name == "Engineering" where age < 30)
+let mid_level = all_engineers - (senior_engineers + junior_engineers)
+```
 
 ---
 
@@ -857,16 +1043,27 @@ The following functions are mentioned in the tutorial but are **NOT currently im
 
 | Keyword | Purpose |
 |---------|---------|
+| `key` | Primary key constraint (one per table) |
 | `unique` | Unique constraint |
 | `non_null` | Non-null constraint |
 | `validate` | Validation constraint |
 | `references` | Foreign key reference |
+
+### Query Language Keywords
+
+| Keyword | Purpose |
+|---------|---------|
+| `where` | Filter table rows (infix syntax) |
+| `by` | Used in sort expressions |
+| `asc` | Sort in ascending order |
+| `desc` | Sort in descending order |
 
 ### Other Keywords
 
 | Keyword | Purpose |
 |---------|---------|
 | `from` | Used in external/import |
+| `ref` | Reference type |
 | `single` | Single-select filter |
 | `multi` | Multi-select filter |
 | `filter` | Filter type/function |
@@ -887,8 +1084,7 @@ This is **NOT supported**. All function arguments must be positional.
 ### 2. Missing Built-in Functions
 
 The following functions are documented in the tutorial but not implemented:
-- `join()` - Table joins
-- `select()` - Column selection
+- `join()` - Table joins (use reference navigation instead)
 - `add_column()` - Computed columns
 - `group_by()` - Grouping and aggregation
 - `limit()` - Row limiting

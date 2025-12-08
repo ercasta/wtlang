@@ -1086,6 +1086,296 @@ page ChainModification {
 }
 ```
 
+## Query Language
+
+WTLang provides a concise query language for working with tables, making data manipulation more natural and readable.
+
+### Filtering with WHERE
+
+Use the `where` keyword with infix notation to filter table rows:
+
+```wtlang
+page FilteringExamples {
+  title "WHERE Clause Examples"
+  
+  table User {
+    id: int
+    name: string
+    age: int
+    subscription: string
+  }
+  
+  let users = load_csv("users.csv", User)
+  
+  // Simple filter
+  let adults = users where age >= 18
+  show(adults)
+  
+  // Complex conditions with parentheses
+  let young_premium = users where (age < 30 and subscription == "premium")
+  show(young_premium)
+  
+  // Multiple filters can be chained
+  let active_seniors = users 
+    where age >= 65 
+    where subscription != "inactive"
+  show(active_seniors)
+}
+```
+
+### Sorting with SORT BY
+
+Sort tables using the `sort by` syntax with ascending (`asc`) or descending (`desc`) order:
+
+```wtlang
+page SortingExamples {
+  title "Sorting Examples"
+  
+  table Product {
+    name: string
+    category: string
+    price: currency
+    stock: int
+  }
+  
+  let products = load_csv("products.csv", Product)
+  
+  // Sort by single column (ascending)
+  let by_name = products sort by name asc
+  show(by_name)
+  
+  // Sort descending
+  let by_price_desc = products sort by price desc
+  show(by_price_desc)
+  
+  // Multi-column sort
+  let sorted = products sort by category asc, price desc
+  show(sorted)
+}
+```
+
+### Column Selection
+
+Select specific columns from a table using bracket notation:
+
+```wtlang
+page ColumnSelection {
+  title "Column Selection"
+  
+  table Employee {
+    id: int
+    name: string
+    department: string
+    salary: currency
+    email: string
+  }
+  
+  let employees = load_csv("employees.csv", Employee)
+  
+  // Select just name and department
+  let names = employees[name, department]
+  show(names)
+  
+  // Combine with filtering
+  let it_emails = (employees where department == "IT")[name, email]
+  show(it_emails)
+}
+```
+
+### Set Operations
+
+Perform set operations on tables with compatible schemas:
+
+```wtlang
+page SetOperations {
+  title "Set Operations on Tables"
+  
+  table Person {
+    id: int
+    name: string
+    age: int
+  }
+  
+  let all_people = load_csv("people.csv", Person)
+  
+  // Create subsets
+  let seniors = all_people where age >= 65
+  let minors = all_people where age < 18
+  let adults = all_people where (age >= 18 and age < 65)
+  
+  // Union: combine tables (removes duplicates)
+  let special_rates = seniors + minors
+  show(special_rates)
+  
+  // Difference: rows in first table but not in second
+  let regular_customers = all_people - special_rates
+  show(regular_customers)
+  
+  // Intersection: rows that appear in both tables
+  let active_adults = adults & regular_customers
+  show(active_adults)
+}
+```
+
+### Combining Query Operations
+
+All query operations can be combined for powerful data manipulation:
+
+```wtlang
+page CombinedQueries {
+  title "Combined Query Operations"
+  
+  table Order {
+    order_id: int
+    customer_name: string
+    product: string
+    amount: currency
+    status: string
+  }
+  
+  let orders = load_csv("orders.csv", Order)
+  
+  // Filter, select columns, and sort
+  let summary = orders
+    where status == "completed"
+    where amount > $100
+    sort by amount desc
+  let final = summary[customer_name, product, amount]
+  show(final)
+}
+```
+
+## Table References and Keys
+
+Define relationships between tables using primary keys and reference types.
+
+### Primary Keys
+
+Mark a table field as the primary key using the `key` constraint:
+
+```wtlang
+table Department {
+  code: string [key]  // Primary key
+  name: string
+  budget: currency
+}
+
+table Category {
+  id: int [key]  // Primary key
+  name: string
+  description: string
+}
+```
+
+**Key constraints ensure:**
+- Each row has a unique identifier
+- Only one field per table can be marked as `key`
+- Referenced tables must have a key field
+
+### Reference Types
+
+Create references to other tables using the `ref` type:
+
+```wtlang
+table Employee {
+  emp_id: int [key]
+  name: string
+  dept: ref Department  // References Department table
+  salary: currency
+}
+
+table Product {
+  id: int [key]
+  name: string
+  category: ref Category  // References Category table
+  price: currency
+}
+```
+
+**Reference types provide:**
+- Type-safe references to other tables
+- Automatic validation (referenced table must exist and have a key)
+- Navigation from one table to another
+
+### Navigating References
+
+Access referenced table data directly through reference fields:
+
+```wtlang
+page ReferenceNavigation {
+  title "Working with References"
+  
+  table Department {
+    code: string [key]
+    name: string
+    budget: currency
+  }
+  
+  table Employee {
+    emp_id: int [key]
+    name: string
+    dept: ref Department
+    salary: currency
+  }
+  
+  let departments = load_csv("departments.csv", Department)
+  let employees = load_csv("employees.csv", Employee)
+  
+  section "All Employees" {
+    show(employees)
+  }
+  
+  section "Department Information" {
+    // Navigate to departments through reference
+    // This automatically performs a lookup/join
+    let dept_info = employees.dept
+    show(dept_info)
+  }
+  
+  section "Filtered by Department" {
+    // Can filter using referenced table fields
+    let it_staff = employees where dept.name == "IT"
+    show(it_staff)
+  }
+}
+```
+
+**How reference navigation works:**
+1. The compiler detects field access on a reference type
+2. Generates code to perform a lookup/join operation
+3. Returns the referenced table row(s)
+
+### Best Practices for Keys and References
+
+1. **Use meaningful primary keys** - Keys should be stable identifiers
+   ```wtlang
+   // Good: stable, meaningful ID
+   table User {
+     user_id: int [key]
+     email: string
+   }
+   
+   // Avoid: using mutable fields as keys
+   table User {
+     email: string [key]  // Email might change!
+   }
+   ```
+
+2. **Reference validation** - The compiler validates references at compile time:
+   ```wtlang
+   table Employee {
+     dept: ref Department  // Error if Department doesn't exist
+   }
+   ```
+
+3. **One key per table** - Only one field can be marked as `key`:
+   ```wtlang
+   table Product {
+     id: int [key]
+     sku: string [key]  // Error: multiple keys not allowed
+   }
+   ```
+
 ## User-Defined Functions
 
 Create your own functions for reusable logic.

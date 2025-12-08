@@ -15,15 +15,66 @@ table Orders {
 }
 
 page UserAnalysis {
+    title "Query Language Examples"
+    
     // Load data
-    users: Users = load_csv("data/users.csv")
-    orders: Orders = load_csv("data/orders.csv")
+    let users = load_csv("data/users.csv", Users)
+    let orders = load_csv("data/orders.csv", Orders)
     
-    // Test basic display
-    show(users)
-    show(orders)
+    section "All Users" {
+        show(users)
+    }
     
-    // Test column selection
-    user_names: Users = users[name, city]
-    show(user_names)
+    section "All Orders" {
+        show(orders)
+    }
+    
+    section "WHERE Clause" {
+        // Filter by age
+        let adults = users where age >= 18
+        show(adults)
+        
+        // Complex filter
+        let seniors = users where age >= 65
+        show(seniors)
+    }
+    
+    section "SORT BY" {
+        // Sort by name ascending
+        let by_name = users sort by name asc
+        show(by_name)
+        
+        // Sort by age descending
+        let by_age = users sort by age desc
+        show(by_age)
+    }
+    
+    section "Column Selection" {
+        // Select specific columns
+        let names_only = users[name, city]
+        show(names_only)
+    }
+    
+    section "Set Operations" {
+        // Create subsets
+        let seniors = users where age >= 65
+        let minors = users where age < 18
+        
+        // Union - combine tables
+        let special_rates = seniors + minors
+        show(special_rates)
+        
+        // Difference - exclude special rates
+        let regular = users - special_rates
+        show(regular)
+    }
+    
+    section "Combined Operations" {
+        // Combine where, sort, and column selection
+        let summary = users 
+            where age >= 18
+            sort by age desc
+        let final = summary[name, age, city]
+        show(final)
+    }
 }

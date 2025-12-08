@@ -371,14 +371,15 @@ impl CodeGenerator {
                 
                 if columns.len() == 1 {
                     let col = &columns[0];
+                    let asc_str = if col.ascending { "True" } else { "False" };
                     Ok(format!("{}.sort_values(by='{}', ascending={})",
-                        table_code, col.column, col.ascending))
+                        table_code, col.column, asc_str))
                 } else {
                     let col_names: Vec<String> = columns.iter()
                         .map(|c| format!("'{}'", c.column))
                         .collect();
                     let ascending: Vec<String> = columns.iter()
-                        .map(|c| c.ascending.to_string())
+                        .map(|c| if c.ascending { "True".to_string() } else { "False".to_string() })
                         .collect();
                     
                     Ok(format!("{}.sort_values(by=[{}], ascending=[{}])",
@@ -496,6 +497,21 @@ impl CodeGenerator {
                 }
                 // args: table, column, operation
                 Ok(format!("{}[{}].{}()", args_code[0], args_code[1], args_code[2].trim_matches('"')))
+            }
+            "show" => {
+                if args_code.is_empty() {
+                    return Err("show requires a table argument".to_string());
+                }
+                // Generate st.dataframe() for show
+                Ok(format!("st.dataframe({})", args_code[0]))
+            }
+            "show_editable" => {
+                if args_code.is_empty() {
+                    return Err("show_editable requires a table argument".to_string());
+                }
+                // Generate st.data_editor() for show_editable
+                let key_num = self.get_unique_key();
+                Ok(format!("st.data_editor({}, key=\"editor_{}\", use_container_width=True)", args_code[0], key_num))
             }
             _ => {
                 // Regular function call
@@ -873,14 +889,15 @@ impl CodeGenerator {
             }
             
             IRExpr::FieldAccess { field, .. } => {
-                // In query string, just use column name
-                Ok(field.clone())
+                // In query string, column names need to be quoted if they contain spaces or special chars
+                // Use backticks for pandas query syntax
+                Ok(format!("`{}`", field))
             }
             
             IRExpr::Variable { name, .. } => {
                 // In a where clause, bare identifiers are column names
-                // not variable references. Pandas query syntax uses column names directly.
-                Ok(name.clone())
+                // Pandas query syntax requires column names to be quoted with backticks
+                Ok(format!("`{}`", name))
             }
             
             IRExpr::Literal { value, .. } => {
@@ -888,7 +905,7 @@ impl CodeGenerator {
                     Literal::Int(n) => Ok(n.to_string()),
                     Literal::Float(f) => Ok(f.to_string()),
                     Literal::String(s) => Ok(format!("'{}'", self.escape_string(s))),
-                    Literal::Bool(b) => Ok(if *b { "True" } else { "False" }.to_string()),
+                    Literal::Bool(b) => Ok(if *b { "True" } else { "False" }.to_string()),  // Python booleans in query string
                 }
             }
             
